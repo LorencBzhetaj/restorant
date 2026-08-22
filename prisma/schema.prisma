@@ -1,0 +1,122 @@
+// Terrazza — restaurant table reservation demo
+// SQLite for the local demo; schema kept clean for a PostgreSQL migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model RestaurantTable {
+  id        String   @id @default(cuid())
+  name      String // e.g. "T1", "Terrace 3"
+  seats     Int
+  section   String // e.g. "Main hall", "Terrace", "Window"
+  shape     String   @default("square") // square | round | rect
+  // Floor-map position on a 12 x 8 grid (mobile-first, scales responsively)
+  x         Int      @default(0)
+  y         Int      @default(0)
+  w         Int      @default(2)
+  h         Int      @default(2)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([section])
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  phone          String
+  whatsappNumber String?
+  email          String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@index([phone])
+}
+
+model Reservation {
+  id            String   @id @default(cuid())
+  tableId       String
+  customerId    String
+  startDateTime DateTime
+  endDateTime   DateTime
+  partySize     Int
+  status        String   @default("Confirmed") // Confirmed | Seated | Completed | Cancelled | NoShow
+  notes         String?
+  source        String   @default("Online") // Online | Walk-in | Phone
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  table         RestaurantTable @relation(fields: [tableId], references: [id])
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  notifications Notification[]
+
+  @@index([tableId, startDateTime])
+  @@index([startDateTime])
+  @@index([customerId])
+  @@index([status])
+}
+
+// Restaurant-wide opening hours; supports multiple periods per day (lunch / dinner shifts).
+model OpeningHour {
+  id        String  @id @default(cuid())
+  dayOfWeek Int // 0 = Sunday ... 6 = Saturday
+  startTime String // "HH:mm"
+  endTime   String // "HH:mm"
+  isActive  Boolean @default(true)
+
+  @@index([dayOfWeek])
+}
+
+// Restaurant-wide closures (single day or a range).
+model Closure {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  reservationId String
+  type          String // BookingConfirmation | Reminder24h | Reminder2h | Cancellation | Reschedule | Completed | NoShow
+  channel       String   @default("WhatsApp")
+  status        String   @default("Sent")
+  message       String
+  recipient     String
+  createdAt     DateTime @default(now())
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([reservationId])
+}
+
+model RestaurantSetting {
+  id                  String   @id @default(cuid())
+  name                String
+  tagline             String?
+  phone               String?
+  whatsapp            String?
+  address             String?
+  email               String?
+  currency            String   @default("EUR")
+  turnDurationMinutes Int      @default(120) // how long a table is held per booking
+  bookingInterval     Int      @default(30) // slot granularity, minutes
+  seatingBuffer       Int      @default(15) // minutes between bookings on the same table
+  maxPartySize        Int      @default(12)
+  timezone            String   @default("Europe/Tirane")
+  updatedAt           DateTime @updatedAt
+}
