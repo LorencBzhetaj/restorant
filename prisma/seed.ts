@@ -188,7 +188,7 @@ async function main() {
       data: {
         reservationId: created.id,
         type: "BookingConfirmation",
-        channel: "WhatsApp",
+        channel: "Email",
         status: "Sent",
         message: "Booking confirmation sent.",
         recipient: "",
@@ -197,7 +197,7 @@ async function main() {
     });
     if (r.status === "Completed") {
       await prisma.notification.create({
-        data: { reservationId: created.id, type: "Completed", channel: "WhatsApp", status: "Sent", message: "Thank you for dining with us!", recipient: "", createdAt: r.endDateTime },
+        data: { reservationId: created.id, type: "Completed", channel: "Email", status: "Sent", message: "Thank you for dining with us!", recipient: "", createdAt: r.endDateTime },
       });
     }
   }

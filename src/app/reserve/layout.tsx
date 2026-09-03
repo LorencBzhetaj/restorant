@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { BrandMark } from "@/components/site/brand-mark";
 import { ReserveStepper } from "@/components/reserve/reserve-stepper";
 import { getRestaurant } from "@/lib/settings";
@@ -9,11 +8,8 @@ export default async function ReserveLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen bg-muted/30">
       <header className="border-b border-border bg-background">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <Link href="/"><BrandMark name={s.name} /></Link>
-          <Link href="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-            <ArrowLeft className="size-4" /> Back to site
-          </Link>
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-center px-4 sm:px-6">
+          <Link href="/reserve"><BrandMark name={s.name} /></Link>
         </div>
       </header>
       <div className="border-b border-border bg-background/60 py-6">

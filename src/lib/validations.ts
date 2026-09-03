@@ -4,8 +4,7 @@ export const customerDetailsSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(60),
   lastName: z.string().trim().max(60).optional().or(z.literal("")),
   phone: z.string().trim().min(6, "A valid phone number is required").max(30),
-  whatsappNumber: z.string().trim().max(30).optional().or(z.literal("")),
-  email: z.string().trim().email("Enter a valid email").optional().or(z.literal("")),
+  email: z.string().trim().email("A valid email is required — we send your confirmation there").max(120),
   notes: z.string().trim().max(500).optional().or(z.literal("")),
 });
 

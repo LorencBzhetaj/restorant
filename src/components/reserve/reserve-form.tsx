@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CheckCircle2, MessageCircle, Users, Armchair, CalendarDays, Clock, Loader2 } from "lucide-react";
+import { CheckCircle2, Mail, Users, Armchair, CalendarDays, Clock, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,7 @@ export function ReserveForm({
   summary: Summary;
 }) {
   const [pending, startTransition] = useTransition();
-  const [success, setSuccess] = useState<null | { phone: string }>(null);
+  const [success, setSuccess] = useState<null | { email: string; cancelToken: string }>(null);
 
   const {
     register,
@@ -40,14 +40,14 @@ export function ReserveForm({
     formState: { errors },
   } = useForm<CustomerDetailsInput>({
     resolver: zodResolver(customerDetailsSchema),
-    defaultValues: { firstName: "", lastName: "", phone: "", whatsappNumber: "", email: "", notes: "" },
+    defaultValues: { firstName: "", lastName: "", phone: "", email: "", notes: "" },
   });
 
   function onSubmit(values: CustomerDetailsInput) {
     startTransition(async () => {
       const res = await createReservation({ ...values, tableId, start, partySize });
-      if (res.ok) setSuccess({ phone: values.whatsappNumber || values.phone });
-      else toast.error(res.error);
+      if (res.ok && res.data) setSuccess({ email: res.data.email, cancelToken: res.data.cancelToken });
+      else if (!res.ok) toast.error(res.error);
     });
   }
 
@@ -63,10 +63,15 @@ export function ReserveForm({
           <SummaryRows summary={summary} />
         </div>
         <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-          <MessageCircle className="size-4" /> WhatsApp confirmation sent to {success.phone}
+          <Mail className="size-4" /> Confirmation email sent to {success.email}
         </div>
-        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <Button asChild variant="outline"><Link href="/">Back to home</Link></Button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          The restaurant has also been notified. Need to cancel? Use the button in your email, or here:
+        </p>
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <Button asChild variant="outline">
+            <Link href={`/r/${success.cancelToken}`}><XCircle className="size-4" /> Manage / cancel</Link>
+          </Button>
           <Button asChild><Link href="/reserve">New reservation</Link></Button>
         </div>
       </div>
@@ -88,13 +93,10 @@ export function ReserveForm({
           <Field label="Phone" required error={errors.phone?.message}>
             <Input {...register("phone")} placeholder="+355 69 123 4567" inputMode="tel" autoComplete="tel" />
           </Field>
-          <Field label="WhatsApp number" hint="For your confirmation" error={errors.whatsappNumber?.message}>
-            <Input {...register("whatsappNumber")} placeholder="Same as phone" inputMode="tel" />
+          <Field label="Email" required hint="We send your confirmation here" error={errors.email?.message}>
+            <Input {...register("email")} placeholder="andi@example.com" type="email" autoComplete="email" />
           </Field>
         </div>
-        <Field label="Email" hint="Optional" error={errors.email?.message}>
-          <Input {...register("email")} placeholder="andi@example.com" type="email" autoComplete="email" />
-        </Field>
         <Field label="Special requests" hint="Optional" error={errors.notes?.message}>
           <Textarea {...register("notes")} placeholder="Allergies, celebrations, seating preferences…" rows={3} />
         </Field>

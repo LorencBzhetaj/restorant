@@ -66,12 +66,12 @@ export function AdminSidebar({
 
       <div className="border-t border-sidebar-border p-3">
         <Link
-          href="/"
+          href="/reserve"
           target="_blank"
           onClick={onNavigate}
           className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
         >
-          <ExternalLink className="size-4.5" /> View public site
+          <ExternalLink className="size-4.5" /> Booking page
         </Link>
       </div>
     </div>

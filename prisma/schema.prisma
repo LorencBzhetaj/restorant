@@ -49,6 +49,7 @@ model Customer {
 
 model Reservation {
   id            String   @id @default(cuid())
+  cancelToken   String   @unique @default(cuid()) // used for the self-service cancel link in emails
   tableId       String
   customerId    String
   startDateTime DateTime

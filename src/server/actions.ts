@@ -54,7 +54,7 @@ function timeOf(d: Date) {
 
 export async function createReservation(
   raw: unknown,
-): Promise<ActionResult<{ reservationId: string }>> {
+): Promise<ActionResult<{ reservationId: string; cancelToken: string; email: string }>> {
   const parsed = createReservationSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reservation details" };
@@ -115,13 +115,26 @@ export async function createReservation(
 
     await sendNotification(reservation.id, "BookingConfirmation");
     revalidateAdmin();
-    return { ok: true, data: { reservationId: reservation.id } };
+    return { ok: true, data: { reservationId: reservation.id, cancelToken: reservation.cancelToken, email: input.email } };
   } catch (e) {
     if (e instanceof Error && e.message === "SLOT_TAKEN") {
       return { ok: false, error: "That table was just booked. Please pick another slot." };
     }
     return { ok: false, error: "Could not create the reservation. Please try again." };
   }
+}
+
+/** Self-service cancellation via the token in the confirmation email. */
+export async function cancelReservationByToken(token: string): Promise<ActionResult> {
+  const res = await prisma.reservation.findUnique({ where: { cancelToken: token } });
+  if (!res) return { ok: false, error: "Reservation not found" };
+  if (res.status === "Cancelled") return { ok: true };
+  if (res.status === "Completed") return { ok: false, error: "This reservation has already taken place." };
+  await prisma.reservation.update({ where: { id: res.id }, data: { status: "Cancelled" } });
+  await sendNotification(res.id, "Cancellation");
+  revalidateAdmin();
+  revalidatePath(`/r/${token}`);
+  return { ok: true };
 }
 
 export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reservationId: string }>> {
