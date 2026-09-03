@@ -62,8 +62,34 @@ To simply "hold more reservations at 8pm", add more tables (or a section) on the
 
 ## Using it on a WordPress site
 
-- **Embed:** iframe `/reserve` into any page/post (it's self-contained and responsive).
-- **API:** availability is a plain JSON endpoint (`GET /api/availability?date=YYYY-MM-DD&party=N`); reservation create/cancel are server actions that can be exposed as REST routes for a custom front end.
+### Option A — drop-in embed (easiest)
+Paste this where the widget should appear (Custom HTML block / theme):
+
+```html
+<script src="https://YOUR-DOMAIN/embed.js" data-origin="https://YOUR-DOMAIN"></script>
+```
+
+`embed.js` inserts a responsive iframe of `/reserve` and auto-resizes it to fit (no scrollbars) via `postMessage`.
+
+### Option B — REST API (custom front end)
+All endpoints send CORS headers (configure allowed sites with `ALLOWED_ORIGINS`).
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/availability?date=YYYY-MM-DD&party=N` | Available times for a date + party size |
+| `POST` | `/api/reservations` | Create a reservation (JSON body below) |
+| `GET` | `/api/reservations/{token}` | Read a reservation by its token |
+| `POST` | `/api/reservations/{token}/cancel` | Cancel a reservation |
+
+Create body:
+```json
+{ "start": "2026-09-05T18:00:00.000Z", "partySize": 2,
+  "firstName": "Andi", "lastName": "Hysa",
+  "phone": "+355 69 123 4567", "email": "andi@example.com",
+  "notes": "" }
+```
+Response: `{ "ok": true, "reservationId": "...", "cancelToken": "...", "manageUrl": "https://YOUR-DOMAIN/r/..." }`.
+Price/availability are always validated server-side; a suitable free table is assigned automatically.
 
 ## Project structure
 

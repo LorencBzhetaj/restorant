@@ -1,7 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getAvailableTimes, getTableAvailabilityAt } from "@/lib/availability";
+import { json, preflight } from "@/lib/cors";
+
+export async function OPTIONS(req: NextRequest) {
+  return preflight(req.headers.get("origin"));
+}
 
 export async function GET(req: NextRequest) {
+  const origin = req.headers.get("origin");
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
   const time = searchParams.get("time");
@@ -9,7 +15,7 @@ export async function GET(req: NextRequest) {
   const ignore = searchParams.get("ignore") ?? undefined;
 
   if (!date) {
-    return NextResponse.json({ error: "Missing date" }, { status: 400 });
+    return json({ error: "Missing date" }, origin, 400);
   }
 
   try {
@@ -21,12 +27,12 @@ export async function GET(req: NextRequest) {
         partySize: party,
         ignoreReservationId: ignore,
       });
-      return NextResponse.json({ tables });
+      return json({ tables }, origin);
     }
     // Otherwise -> available start times for the party size.
     const slots = await getAvailableTimes({ dateStr: date, partySize: party });
-    return NextResponse.json({ slots });
+    return json({ slots }, origin);
   } catch {
-    return NextResponse.json({ error: "Failed to load availability" }, { status: 500 });
+    return json({ error: "Failed to load availability" }, origin, 500);
   }
 }

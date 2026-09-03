@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/site/brand-mark";
 import { ReserveStepper } from "@/components/reserve/reserve-stepper";
+import { EmbedResizer } from "@/components/reserve/embed-resizer";
 import { getRestaurant } from "@/lib/settings";
 
 export default async function ReserveLayout({ children }: { children: React.ReactNode }) {
   const s = await getRestaurant();
   return (
     <div className="min-h-screen bg-muted/30">
+      <EmbedResizer />
       <header className="border-b border-border bg-background">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-center px-4 sm:px-6">
           <Link href="/reserve"><BrandMark name={s.name} /></Link>
