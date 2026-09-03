@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDateLong, formatTime } from "@/lib/format";
 import { ReserveForm } from "@/components/reserve/reserve-form";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Your details" };
 
 export default async function ReserveDetailsPage({
