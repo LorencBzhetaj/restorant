@@ -6,8 +6,7 @@ import { cn } from "@/lib/utils";
 
 const STEPS = [
   { key: "datetime", label: "Date & time", match: (p: string) => p === "/reserve" },
-  { key: "table", label: "Table", match: (p: string) => p.includes("/reserve/table") },
-  { key: "details", label: "Details", match: (p: string) => p.includes("/reserve/details") },
+  { key: "details", label: "Your details", match: (p: string) => p.includes("/reserve/details") },
 ];
 
 export function ReserveStepper() {

@@ -41,7 +41,7 @@ export default async function HomePage() {
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/70">
               {s.tagline ?? "Modern Mediterranean dining in the heart of Tirana."} Reserve your table
-              in under a minute — pick your spot on our floor plan.
+              online in under a minute — just pick a time.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="h-12 px-7 text-base">
@@ -120,7 +120,7 @@ export default async function HomePage() {
           <Star className="mx-auto size-6 text-brand" />
           <h2 className="mt-5 font-heading text-4xl font-semibold tracking-tight sm:text-5xl">Join us for dinner</h2>
           <p className="mx-auto mt-4 max-w-md text-white/60">
-            Pick your table on our floor plan and reserve in seconds.
+            Choose a time and reserve your table in seconds.
           </p>
           <Button asChild size="lg" className="mt-8 h-12 px-8 text-base">
             <Link href="/reserve">Reserve a table <ArrowRight className="size-4" /></Link>

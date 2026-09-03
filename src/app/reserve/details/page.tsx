@@ -30,7 +30,7 @@ export default async function ReserveDetailsPage({
         start={start}
         partySize={partySize}
         summary={{
-          tableName: table ? `${table.name} · ${table.section}` : "First available table",
+          tableName: table ? `${table.name} · ${table.section}` : "Assigned for you",
           dateLabel: formatDateLong(startDate),
           timeLabel: formatTime(startDate),
           partyLabel: `${partySize} ${partySize === 1 ? "guest" : "guests"}`,

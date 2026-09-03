@@ -53,8 +53,9 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
   ].filter((g) => g.items.length > 0);
 
   function choose(slot: Slot) {
-    const params = new URLSearchParams({ date, party: String(party), start: slot.start, time: slot.time });
-    router.push(`/reserve/table?${params.toString()}`);
+    // Table is assigned automatically — go straight to the details step.
+    const params = new URLSearchParams({ date, party: String(party), start: slot.start, tableId: "any" });
+    router.push(`/reserve/details?${params.toString()}`);
   }
 
   return (
