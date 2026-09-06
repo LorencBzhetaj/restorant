@@ -11,11 +11,28 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// A dining area (e.g. Indoor / Outdoor / Terrace / Rooftop). Outdoor areas can
+// be closed on the fly (bad weather) without deleting reservations.
+model Area {
+  id               String  @id @default(cuid())
+  name             String // "Indoor", "Outdoor", "Terrace"…
+  kind             String  @default("indoor") // indoor | outdoor
+  isOpen           Boolean @default(true) // staff toggle (e.g. closed for weather)
+  weatherDependent Boolean @default(false)
+  priority         Int     @default(0) // lower = preferred for "no preference"
+  sortOrder        Int     @default(0)
+
+  tables RestaurantTable[]
+
+  @@index([kind])
+}
+
 model RestaurantTable {
   id        String   @id @default(cuid())
   name      String // e.g. "T1", "Terrace 3"
   seats     Int
-  section   String // e.g. "Main hall", "Terrace", "Window"
+  section   String // free-text label within an area (e.g. "Window", "Bar")
+  areaId    String?
   shape     String   @default("square") // square | round | rect
   // Floor-map position on a 12 x 8 grid (mobile-first, scales responsively)
   x         Int      @default(0)
@@ -27,9 +44,11 @@ model RestaurantTable {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  area         Area?         @relation(fields: [areaId], references: [id])
   reservations Reservation[]
 
   @@index([section])
+  @@index([areaId])
 }
 
 model Customer {
@@ -59,6 +78,7 @@ model Reservation {
   status        String   @default("Confirmed") // Confirmed | Seated | Completed | Cancelled | NoShow
   notes         String?
   source        String   @default("Online") // Online | Walk-in | Phone
+  requestedArea String   @default("no_preference") // indoor | outdoor | no_preference
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -129,9 +149,10 @@ model RestaurantSetting {
 // Per-time overrides for the slot caps, e.g. "max 4 reservations at 18:00".
 // dayOfWeek = null applies to every day.
 model SlotLimit {
-  id              String @id @default(cuid())
+  id              String  @id @default(cuid())
   dayOfWeek       Int?
   time            String // "HH:mm" (reservation start time)
+  areaKind        String? // null = whole restaurant; "indoor" | "outdoor" = that area only
   maxReservations Int
   maxCovers       Int?
 

@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const time = searchParams.get("time");
   const party = Number(searchParams.get("party") ?? "2");
   const ignore = searchParams.get("ignore") ?? undefined;
+  const areaParam = searchParams.get("area");
+  const requestedArea = areaParam === "indoor" || areaParam === "outdoor" ? areaParam : "no_preference";
 
   if (!date) {
     return json({ error: "Missing date" }, origin, 400);
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest) {
       return json({ tables }, origin);
     }
     // Otherwise -> available start times for the party size.
-    const slots = await getAvailableTimes({ dateStr: date, partySize: party });
+    const slots = await getAvailableTimes({ dateStr: date, partySize: party, requestedArea });
     return json({ slots }, origin);
   } catch {
     return json({ error: "Failed to load availability" }, origin, 500);

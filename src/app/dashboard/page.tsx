@@ -11,19 +11,24 @@ import {
   UserX,
   ArrowRight,
 } from "lucide-react";
-import { getDashboardData } from "@/server/data";
+import { getDashboardData, getAreasOverview } from "@/server/data";
 import { formatTime, formatDate } from "@/lib/format";
 import { StatCard } from "@/components/admin/stat-card";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { RevenueChart, AppointmentsChart, HorizontalCountChart } from "@/components/admin/charts";
+import { AreaControls } from "@/components/admin/area-controls";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const d = await getDashboardData();
+  const [d, areasOverview] = await Promise.all([getDashboardData(), getAreasOverview()]);
 
   return (
     <div className="space-y-6">
+      <AreaControls
+        areas={areasOverview.areas}
+        affected={areasOverview.affected.map((a) => ({ ...a, start: a.start.toISOString() }))}
+      />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Today's reservations" value={d.cards.todayCount} icon={CalendarDays} accent="brand" />
         <StatCard label="Covers today" value={d.cards.coversToday} icon={Users} accent="blue" hint="Guests booked" />

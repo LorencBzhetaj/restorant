@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { CheckCircle2, Mail, Users, Armchair, CalendarDays, Clock, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Mail, Users, Armchair, CalendarDays, Clock, Loader2, XCircle, Trees, CloudRain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import { createReservation } from "@/server/actions";
 
 interface Summary {
   tableName: string;
+  areaLabel: string;
   dateLabel: string;
   timeLabel: string;
   partyLabel: string;
@@ -24,11 +25,15 @@ export function ReserveForm({
   tableId,
   start,
   partySize,
+  requestedArea,
+  outdoor,
   summary,
 }: {
   tableId: string;
   start: string;
   partySize: number;
+  requestedArea: "indoor" | "outdoor" | "no_preference";
+  outdoor: boolean;
   summary: Summary;
 }) {
   const [pending, startTransition] = useTransition();
@@ -47,7 +52,7 @@ export function ReserveForm({
   function onSubmit(values: CustomerDetailsInput) {
     if (!agreed) return;
     startTransition(async () => {
-      const res = await createReservation({ ...values, tableId, start, partySize });
+      const res = await createReservation({ ...values, tableId, start, partySize, requestedArea });
       if (res.ok && res.data) setSuccess({ email: res.data.email, cancelToken: res.data.cancelToken });
       else if (!res.ok) toast.error(res.error);
     });
@@ -102,6 +107,15 @@ export function ReserveForm({
         <Field label="Special requests" hint="Optional" error={errors.notes?.message}>
           <Textarea {...register("notes")} placeholder="Allergies, celebrations, seating preferences…" rows={3} />
         </Field>
+        {outdoor && (
+          <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+            <CloudRain className="mt-0.5 size-4 shrink-0" />
+            <span>
+              This is an <strong>outdoor</strong> reservation. In case of bad weather we&apos;ll contact you to confirm an indoor
+              table. Your confirmation email notes this.
+            </span>
+          </div>
+        )}
         <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
           <input
             type="checkbox"
@@ -139,6 +153,7 @@ function SummaryRows({ summary }: { summary: Summary }) {
   return (
     <dl className="space-y-3 text-sm">
       <Row icon={Armchair} label="Table" value={summary.tableName} />
+      <Row icon={Trees} label="Area" value={summary.areaLabel} />
       <Row icon={Users} label="Guests" value={summary.partyLabel} />
       <Row icon={CalendarDays} label="Date" value={summary.dateLabel} />
       <Row icon={Clock} label="Time" value={summary.timeLabel} />

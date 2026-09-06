@@ -15,7 +15,7 @@ export async function getActiveTables() {
 export async function getAllTables() {
   return prisma.restaurantTable.findMany({
     orderBy: { sortOrder: "asc" },
-    include: { _count: { select: { reservations: true } } },
+    include: { _count: { select: { reservations: true } }, area: true },
   });
 }
 
@@ -111,6 +111,51 @@ export async function getClosures() {
 
 export async function getSlotLimits() {
   return prisma.slotLimit.findMany({ orderBy: [{ time: "asc" }] });
+}
+
+export async function getAreas() {
+  return prisma.area.findMany({ orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] });
+}
+
+/** Areas + (for closed areas) upcoming reservations that may need moving. */
+export async function getAreasOverview() {
+  const now = new Date();
+  const areas = await prisma.area.findMany({ orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] });
+  const closedIds = areas.filter((a) => !a.isOpen).map((a) => a.id);
+
+  let affected: {
+    areaId: string;
+    id: string;
+    start: Date;
+    partySize: number;
+    customerName: string;
+    tableName: string;
+  }[] = [];
+
+  if (closedIds.length) {
+    const rows = await prisma.reservation.findMany({
+      where: {
+        status: { in: ["Confirmed", "Seated"] },
+        startDateTime: { gte: now },
+        table: { areaId: { in: closedIds } },
+      },
+      orderBy: { startDateTime: "asc" },
+      include: { customer: true, table: true },
+    });
+    affected = rows.map((r) => ({
+      areaId: r.table.areaId!,
+      id: r.id,
+      start: r.startDateTime,
+      partySize: r.partySize,
+      customerName: `${r.customer.firstName} ${r.customer.lastName}`,
+      tableName: r.table.name,
+    }));
+  }
+
+  return {
+    areas: areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, isOpen: a.isOpen, weatherDependent: a.weatherDependent })),
+    affected,
+  };
 }
 
 export async function getDashboardData() {

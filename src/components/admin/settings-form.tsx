@@ -24,7 +24,7 @@ interface Settings {
 }
 interface OpeningHour { id: string; dayOfWeek: number; startTime: string; endTime: string }
 interface Closure { id: string; startDate: string; endDate: string; reason: string | null }
-interface SlotLimit { id: string; dayOfWeek: number | null; time: string; maxReservations: number; maxCovers: number | null }
+interface SlotLimit { id: string; dayOfWeek: number | null; time: string; areaKind: string | null; maxReservations: number; maxCovers: number | null }
 
 export function SettingsForm({
   settings, openingHours, closures, slotLimits,
@@ -105,14 +105,16 @@ function SlotLimitsEditor({ slotLimits }: { slotLimits: SlotLimit[] }) {
   const [pending, startTransition] = useTransition();
   const [day, setDay] = useState<string>("-1"); // -1 = every day
   const [time, setTime] = useState("18:00");
+  const [areaKind, setAreaKind] = useState<string>("global");
   const [maxRes, setMaxRes] = useState(4);
 
   function add() {
     startTransition(async () => {
-      const res = await addSlotLimit({ dayOfWeek: Number(day), time, maxReservations: maxRes });
+      const res = await addSlotLimit({ dayOfWeek: Number(day), time, areaKind, maxReservations: maxRes });
       if (res.ok) { toast.success("Limit added"); router.refresh(); } else toast.error(res.error);
     });
   }
+  const areaLabel = (k: string | null) => (k === "indoor" ? "indoor" : k === "outdoor" ? "outdoor" : "whole restaurant");
   function remove(id: string) {
     startTransition(async () => { await deleteSlotLimit(id); router.refresh(); });
   }
@@ -133,6 +135,17 @@ function SlotLimitsEditor({ slotLimits }: { slotLimits: SlotLimit[] }) {
           </Select>
         </div>
         <div className="space-y-1.5"><Label>Time</Label><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sm:w-32" /></div>
+        <div className="space-y-1.5">
+          <Label>Scope</Label>
+          <Select value={areaKind} onValueChange={setAreaKind}>
+            <SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="global">Whole restaurant</SelectItem>
+              <SelectItem value="indoor">Indoor</SelectItem>
+              <SelectItem value="outdoor">Outdoor</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1.5"><Label>Max reservations</Label><Input type="number" min={0} value={maxRes} onChange={(e) => setMaxRes(Number(e.target.value))} className="sm:w-36" /></div>
         <Button onClick={add} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Add</Button>
       </div>
@@ -142,7 +155,7 @@ function SlotLimitsEditor({ slotLimits }: { slotLimits: SlotLimit[] }) {
           <div key={l.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
             <div className="text-sm">
               <span className="font-medium">{l.time}</span>
-              <span className="text-muted-foreground"> · {l.dayOfWeek === null ? "every day" : DAY_NAMES[l.dayOfWeek]} · max {l.maxReservations} reservations</span>
+              <span className="text-muted-foreground"> · {l.dayOfWeek === null ? "every day" : DAY_NAMES[l.dayOfWeek]} · {areaLabel(l.areaKind)} · max {l.maxReservations} reservations</span>
             </div>
             <Button size="icon-sm" variant="ghost" onClick={() => remove(l.id)}><Trash2 className="size-4" /></Button>
           </div>

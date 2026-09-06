@@ -23,29 +23,34 @@ interface TableRow {
   name: string;
   seats: number;
   section: string;
+  areaId: string | null;
+  areaName: string | null;
   shape: string;
   x: number; y: number; w: number; h: number;
   isActive: boolean;
   reservations: number;
 }
+interface AreaOpt { id: string; name: string; kind: string }
 
-const EMPTY = { name: "", seats: 2, section: "Main hall", shape: "square", x: 0, y: 0, w: 2, h: 2, isActive: true };
+const EMPTY = { name: "", seats: 2, section: "Main hall", areaId: "", shape: "square", x: 0, y: 0, w: 2, h: 2, isActive: true };
 
-export function TablesManager({ tables }: { tables: TableRow[] }) {
+export function TablesManager({ tables, areas }: { tables: TableRow[]; areas: AreaOpt[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
 
-  const floorTables: FloorTable[] = tables.filter((t) => t.isActive).map((t) => ({ ...t }));
+  const floorTables: FloorTable[] = tables
+    .filter((t) => t.isActive)
+    .map((t) => ({ id: t.id, name: t.name, seats: t.seats, section: t.section, shape: t.shape, x: t.x, y: t.y, w: t.w, h: t.h }));
   const statuses: Record<string, TableStatus> = {};
   for (const t of floorTables) statuses[t.id] = "free";
 
-  function openNew() { setEditId(null); setForm(EMPTY); setOpen(true); }
+  function openNew() { setEditId(null); setForm({ ...EMPTY, areaId: areas[0]?.id ?? "" }); setOpen(true); }
   function openEdit(t: TableRow) {
     setEditId(t.id);
-    setForm({ name: t.name, seats: t.seats, section: t.section, shape: t.shape, x: t.x, y: t.y, w: t.w, h: t.h, isActive: t.isActive });
+    setForm({ name: t.name, seats: t.seats, section: t.section, areaId: t.areaId ?? "", shape: t.shape, x: t.x, y: t.y, w: t.w, h: t.h, isActive: t.isActive });
     setOpen(true);
   }
 
@@ -87,6 +92,7 @@ export function TablesManager({ tables }: { tables: TableRow[] }) {
             <TableRow>
               <TableHead>Table</TableHead>
               <TableHead>Seats</TableHead>
+              <TableHead>Area</TableHead>
               <TableHead>Section</TableHead>
               <TableHead>Bookings</TableHead>
               <TableHead>Status</TableHead>
@@ -98,6 +104,7 @@ export function TablesManager({ tables }: { tables: TableRow[] }) {
               <TableRow key={t.id}>
                 <TableCell className="font-medium">{t.name}</TableCell>
                 <TableCell className="text-muted-foreground"><span className="inline-flex items-center gap-1.5"><Users className="size-3.5" /> {t.seats}</span></TableCell>
+                <TableCell className="text-muted-foreground">{t.areaName ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground">{t.section}</TableCell>
                 <TableCell className="text-muted-foreground">{t.reservations}</TableCell>
                 <TableCell>
@@ -136,6 +143,18 @@ export function TablesManager({ tables }: { tables: TableRow[] }) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Area</Label>
+              <Select value={form.areaId || "none"} onValueChange={(v) => setForm({ ...form, areaId: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {areas.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name} ({a.kind})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="mb-1.5 block">Position on floor (12 × 8 grid)</Label>

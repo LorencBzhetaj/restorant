@@ -9,9 +9,9 @@ export const metadata = { title: "Your details" };
 export default async function ReserveDetailsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; party?: string; start?: string; tableId?: string; time?: string }>;
+  searchParams: Promise<{ date?: string; party?: string; start?: string; tableId?: string; time?: string; area?: string }>;
 }) {
-  const { party, start, tableId } = await searchParams;
+  const { party, start, tableId, area } = await searchParams;
   if (!party || !start || !tableId) redirect("/reserve");
 
   const startDate = new Date(start);
@@ -19,6 +19,8 @@ export default async function ReserveDetailsPage({
 
   const table = tableId === "any" ? null : await prisma.restaurantTable.findUnique({ where: { id: tableId } });
   const partySize = Number(party);
+  const requestedArea = area === "indoor" || area === "outdoor" ? area : "no_preference";
+  const areaLabel = requestedArea === "indoor" ? "Indoor" : requestedArea === "outdoor" ? "Outdoor" : "No preference";
 
   return (
     <div>
@@ -30,8 +32,11 @@ export default async function ReserveDetailsPage({
         tableId={tableId}
         start={start}
         partySize={partySize}
+        requestedArea={requestedArea}
+        outdoor={requestedArea === "outdoor"}
         summary={{
           tableName: table ? `${table.name} · ${table.section}` : "Assigned for you",
+          areaLabel,
           dateLabel: formatDateLong(startDate),
           timeLabel: formatTime(startDate),
           partyLabel: `${partySize} ${partySize === 1 ? "guest" : "guests"}`,

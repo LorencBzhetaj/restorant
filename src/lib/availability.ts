@@ -60,7 +60,7 @@ export async function getSettings(): Promise<Settings> {
 export interface SlotCaps {
   defaultMaxRes: number; // 0 = no cap
   defaultMaxCovers: number; // 0 = no cap
-  limits: { dayOfWeek: number | null; time: string; maxReservations: number; maxCovers: number | null }[];
+  limits: { dayOfWeek: number | null; time: string; areaKind: string | null; maxReservations: number; maxCovers: number | null }[];
 }
 
 export async function getSlotCaps(): Promise<SlotCaps> {
@@ -72,20 +72,55 @@ export async function getSlotCaps(): Promise<SlotCaps> {
     limits: limits.map((l) => ({
       dayOfWeek: l.dayOfWeek,
       time: l.time,
+      areaKind: l.areaKind,
       maxReservations: l.maxReservations,
       maxCovers: l.maxCovers,
     })),
   };
 }
 
-/** Resolve the effective caps for a given weekday + start time (specific overrides win). */
-export function capForSlot(caps: SlotCaps, dayOfWeek: number, time: string): { maxRes: number; maxCovers: number } {
+/**
+ * Resolve caps for a weekday + start time, scoped to an area kind.
+ * `areaKind = null` -> whole-restaurant cap (falls back to the default caps).
+ * A specific area kind -> that area's cap (0 = no cap unless an override exists).
+ * Day-specific overrides beat every-day ones.
+ */
+export function capForSlot(
+  caps: SlotCaps,
+  dayOfWeek: number,
+  time: string,
+  areaKind: string | null = null,
+): { maxRes: number; maxCovers: number } {
   const matches = caps.limits
-    .filter((l) => l.time === time && (l.dayOfWeek === null || l.dayOfWeek === dayOfWeek))
+    .filter((l) => l.time === time && (l.areaKind ?? null) === (areaKind ?? null) && (l.dayOfWeek === null || l.dayOfWeek === dayOfWeek))
     .sort((a, b) => (a.dayOfWeek === null ? 1 : 0) - (b.dayOfWeek === null ? 1 : 0));
   const chosen = matches[0];
-  if (chosen) return { maxRes: chosen.maxReservations, maxCovers: chosen.maxCovers ?? caps.defaultMaxCovers };
-  return { maxRes: caps.defaultMaxRes, maxCovers: caps.defaultMaxCovers };
+  if (chosen) return { maxRes: chosen.maxReservations, maxCovers: chosen.maxCovers ?? (areaKind === null ? caps.defaultMaxCovers : 0) };
+  if (areaKind === null) return { maxRes: caps.defaultMaxRes, maxCovers: caps.defaultMaxCovers };
+  return { maxRes: 0, maxCovers: 0 };
+}
+
+export interface AreaInfo {
+  id: string;
+  name: string;
+  kind: string;
+  isOpen: boolean;
+  weatherDependent: boolean;
+  priority: number;
+}
+
+export async function getAreas(): Promise<AreaInfo[]> {
+  const areas = await prisma.area.findMany({ orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] });
+  return areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind, isOpen: a.isOpen, weatherDependent: a.weatherDependent, priority: a.priority }));
+}
+
+export type RequestedArea = "indoor" | "outdoor" | "no_preference";
+
+/** Which area ids are bookable for a request (open areas matching the kind). */
+function bookableAreaIds(areas: AreaInfo[], requestedArea: RequestedArea): Set<string> {
+  return new Set(
+    areas.filter((a) => a.isOpen && (requestedArea === "no_preference" || a.kind === requestedArea)).map((a) => a.id),
+  );
 }
 
 async function getPeriodsForDay(dayOfWeek: number): Promise<Period[]> {
@@ -155,13 +190,15 @@ export async function getTableAvailabilityAt(params: {
   });
 }
 
-/** Available start times for a given date + party size. */
+/** Available start times for a given date + party size, optionally by area. */
 export async function getAvailableTimes(params: {
   dateStr: string;
   partySize: number;
+  requestedArea?: RequestedArea;
   now?: Date;
 }): Promise<TimeSlot[]> {
   const { dateStr, partySize } = params;
+  const requestedArea: RequestedArea = params.requestedArea ?? "no_preference";
   const now = params.now ?? new Date();
   const settings = await getSettings();
   const turn = settings.turnDurationMinutes;
@@ -176,8 +213,16 @@ export async function getAvailableTimes(params: {
   const periods = await getPeriodsForDay(dayOfWeek);
   if (periods.length === 0) return [];
 
+  const areas = await getAreas();
+  const openIds = bookableAreaIds(areas, requestedArea);
+  const kindOfArea = new Map(areas.map((a) => [a.id, a.kind]));
+
+  // Tables that fit + belong to a bookable (open, matching-kind) area.
+  // Unassigned tables (no area) are only offered for "no preference".
   const tables = (await prisma.restaurantTable.findMany({ where: { isActive: true } })).filter(
-    (t) => t.seats >= partySize,
+    (t) =>
+      t.seats >= partySize &&
+      (t.areaId ? openIds.has(t.areaId) : requestedArea === "no_preference"),
   );
   if (tables.length === 0) return [];
 
@@ -188,10 +233,11 @@ export async function getAvailableTimes(params: {
       startDateTime: { lte: dayEnd },
       endDateTime: { gte: dayStart },
     },
-    select: { tableId: true, startDateTime: true, endDateTime: true, partySize: true },
+    select: { tableId: true, startDateTime: true, endDateTime: true, partySize: true, table: { select: { areaId: true } } },
   });
 
   const caps = await getSlotCaps();
+  const areaKindForCap = requestedArea === "no_preference" ? null : requestedArea;
 
   const slots: TimeSlot[] = [];
   for (const period of periods) {
@@ -217,17 +263,30 @@ export async function getAvailableTimes(params: {
       }
       if (freeTables === 0) continue;
 
-      // Apply per-slot caps (max reservations / max covers at this exact start time).
-      const { maxRes, maxCovers } = capForSlot(caps, dayOfWeek, timeStr);
       const atSlot = reservations.filter((r) => new Date(r.startDateTime).getTime() === start.getTime());
-      if (maxRes > 0) {
-        const remaining = maxRes - atSlot.length;
+
+      // Global (whole-restaurant) cap.
+      const g = capForSlot(caps, dayOfWeek, timeStr, null);
+      if (g.maxRes > 0) {
+        const remaining = g.maxRes - atSlot.length;
         if (remaining <= 0) continue;
         freeTables = Math.min(freeTables, remaining);
       }
-      if (maxCovers > 0) {
-        const usedCovers = atSlot.reduce((s, r) => s + r.partySize, 0);
-        if (usedCovers + partySize > maxCovers) continue;
+      if (g.maxCovers > 0 && atSlot.reduce((s, r) => s + r.partySize, 0) + partySize > g.maxCovers) continue;
+
+      // Area cap (only when the guest picked a specific area).
+      if (areaKindForCap) {
+        const a = capForSlot(caps, dayOfWeek, timeStr, areaKindForCap);
+        const inArea = atSlot.filter((r) => {
+          const aid = r.table.areaId;
+          return aid ? kindOfArea.get(aid) === areaKindForCap : false;
+        });
+        if (a.maxRes > 0) {
+          const remaining = a.maxRes - inArea.length;
+          if (remaining <= 0) continue;
+          freeTables = Math.min(freeTables, remaining);
+        }
+        if (a.maxCovers > 0 && inArea.reduce((s, r) => s + r.partySize, 0) + partySize > a.maxCovers) continue;
       }
 
       slots.push({ time: timeStr, start: start.toISOString(), freeTables });
@@ -243,12 +302,13 @@ export async function getAvailableTimes(params: {
  */
 export async function slotHasCapacity(
   client: Prisma.TransactionClient,
-  params: { dateStr: string; time: string; partySize: number; ignoreReservationId?: string },
+  params: { dateStr: string; time: string; partySize: number; areaKind?: string | null; ignoreReservationId?: string },
 ): Promise<boolean> {
   const caps = await getSlotCaps();
   const dow = buildDate(params.dateStr, 0).getDay();
-  const { maxRes, maxCovers } = capForSlot(caps, dow, params.time);
-  if (maxRes <= 0 && maxCovers <= 0) return true;
+  const g = capForSlot(caps, dow, params.time, null);
+  const a = params.areaKind ? capForSlot(caps, dow, params.time, params.areaKind) : { maxRes: 0, maxCovers: 0 };
+  if (g.maxRes <= 0 && g.maxCovers <= 0 && a.maxRes <= 0 && a.maxCovers <= 0) return true;
 
   const start = buildDate(params.dateStr, hhmmToMinutes(params.time));
   const atSlot = await client.reservation.findMany({
@@ -257,10 +317,19 @@ export async function slotHasCapacity(
       startDateTime: start,
       ...(params.ignoreReservationId ? { id: { not: params.ignoreReservationId } } : {}),
     },
-    select: { partySize: true },
+    select: { partySize: true, table: { select: { area: { select: { kind: true } } } } },
   });
-  if (maxRes > 0 && atSlot.length >= maxRes) return false;
-  if (maxCovers > 0 && atSlot.reduce((s, r) => s + r.partySize, 0) + params.partySize > maxCovers) return false;
+
+  // Global cap
+  if (g.maxRes > 0 && atSlot.length >= g.maxRes) return false;
+  if (g.maxCovers > 0 && atSlot.reduce((s, r) => s + r.partySize, 0) + params.partySize > g.maxCovers) return false;
+
+  // Area cap
+  if (params.areaKind && (a.maxRes > 0 || a.maxCovers > 0)) {
+    const inArea = atSlot.filter((r) => r.table.area?.kind === params.areaKind);
+    if (a.maxRes > 0 && inArea.length >= a.maxRes) return false;
+    if (a.maxCovers > 0 && inArea.reduce((s, r) => s + r.partySize, 0) + params.partySize > a.maxCovers) return false;
+  }
   return true;
 }
 

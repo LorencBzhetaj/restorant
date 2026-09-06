@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isTableBookable, pickTableForSlot, getSettings, slotHasCapacity } from "@/lib/availability";
+import { isTableBookable, getSettings, slotHasCapacity } from "@/lib/availability";
 import { sendNotification } from "@/lib/notifications";
 import { toDateKey, pad2 } from "@/lib/format";
 import {
@@ -14,6 +14,7 @@ import {
   closureSchema,
   settingsSchema,
   slotLimitSchema,
+  areaSchema,
 } from "@/lib/validations";
 import { ReservationStatus, NotificationType } from "@/lib/constants";
 
@@ -61,8 +62,15 @@ function timeOf(d: Date) {
  */
 async function assignTableTx(
   tx: Prisma.TransactionClient,
-  p: { requestedTableId: string; partySize: number; start: Date; end: Date; bufferMs: number },
-): Promise<string | null> {
+  p: {
+    requestedTableId: string;
+    requestedArea: "indoor" | "outdoor" | "no_preference";
+    partySize: number;
+    start: Date;
+    end: Date;
+    bufferMs: number;
+  },
+): Promise<{ id: string; areaKind: string | null } | null> {
   const busy = await tx.reservation.findMany({
     where: {
       status: { notIn: ["Cancelled", "NoShow"] },
@@ -74,15 +82,32 @@ async function assignTableTx(
   const busyIds = new Set(busy.map((b) => b.tableId));
 
   if (p.requestedTableId !== "any") {
-    return busyIds.has(p.requestedTableId) ? null : p.requestedTableId;
+    const t = await tx.restaurantTable.findUnique({ where: { id: p.requestedTableId }, include: { area: true } });
+    if (!t || !t.isActive || t.seats < p.partySize || busyIds.has(t.id)) return null;
+    return { id: t.id, areaKind: t.area?.kind ?? null };
   }
+
+  const areas = await tx.area.findMany();
+  const openIds = new Set(
+    areas.filter((a) => a.isOpen && (p.requestedArea === "no_preference" || a.kind === p.requestedArea)).map((a) => a.id),
+  );
+  const kindOf = new Map(areas.map((a) => [a.id, a.kind]));
+  const prioOf = new Map(areas.map((a) => [a.id, a.priority]));
 
   const tables = await tx.restaurantTable.findMany({
     where: { isActive: true, seats: { gte: p.partySize } },
-    orderBy: [{ seats: "asc" }, { sortOrder: "asc" }],
-    select: { id: true },
+    select: { id: true, seats: true, sortOrder: true, areaId: true },
   });
-  return tables.find((t) => !busyIds.has(t.id))?.id ?? null;
+  const eligible = tables
+    .filter((t) => (t.areaId ? openIds.has(t.areaId) : p.requestedArea === "no_preference"))
+    .sort(
+      (a, b) =>
+        (prioOf.get(a.areaId ?? "") ?? 99) - (prioOf.get(b.areaId ?? "") ?? 99) ||
+        a.seats - b.seats ||
+        a.sortOrder - b.sortOrder,
+    );
+  const chosen = eligible.find((t) => !busyIds.has(t.id));
+  return chosen ? { id: chosen.id, areaKind: chosen.areaId ? kindOf.get(chosen.areaId) ?? null : null } : null;
 }
 
 export async function createReservation(
@@ -118,22 +143,24 @@ export async function createReservation(
         // Serialize concurrent bookings for the SAME slot so caps + table
         // assignment are race-safe (each concurrent booking gets a distinct table).
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${dateStr}T${time}`})::bigint)`;
-        if (!(await slotHasCapacity(tx, { dateStr, time, partySize: input.partySize }))) {
-          throw new Error("SLOT_FULL");
-        }
 
-        const tableId = await assignTableTx(tx, {
+        const assigned = await assignTableTx(tx, {
           requestedTableId: input.tableId,
+          requestedArea: input.requestedArea,
           partySize: input.partySize,
           start,
           end,
           bufferMs,
         });
-        if (!tableId) throw new Error(isAny ? "NO_TABLE" : "SLOT_TAKEN");
+        if (!assigned) throw new Error(isAny ? "NO_TABLE" : "SLOT_TAKEN");
+
+        if (!(await slotHasCapacity(tx, { dateStr, time, partySize: input.partySize, areaKind: assigned.areaKind }))) {
+          throw new Error("SLOT_FULL");
+        }
 
         return tx.reservation.create({
           data: {
-            tableId,
+            tableId: assigned.id,
             customerId: customer.id,
             startDateTime: start,
             endDateTime: end,
@@ -141,6 +168,7 @@ export async function createReservation(
             status: "Confirmed",
             notes: input.notes || null,
             source: "Online",
+            requestedArea: input.requestedArea,
           },
         });
       },
@@ -182,36 +210,30 @@ export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reserva
   if (Number.isNaN(start.getTime())) return { ok: false, error: "Invalid time" };
 
   const settings = await getSettings();
-  let tableId = input.tableId;
-  if (tableId === "any") {
-    const picked = await pickTableForSlot({ dateStr: toDateKey(start), time: timeOf(start), partySize: input.partySize });
-    if (!picked) return { ok: false, error: "No suitable table free at that time." };
-    tableId = picked;
-  }
-
-  const bookable = await isTableBookable({ tableId, start, partySize: input.partySize });
-  if (!bookable) return { ok: false, error: "That table is not available." };
-
   const end = new Date(start.getTime() + settings.turnDurationMinutes * 60000);
   const bufferMs = settings.seatingBuffer * 60000;
+  const dateStr = toDateKey(start);
+  const time = timeOf(start);
 
   try {
     const customer = await findOrCreateCustomer(input);
+    // Walk-ins bypass the per-slot cap (staff override) but still get a real,
+    // conflict-free table via the same race-safe assignment.
     const reservation = await prisma.$transaction(
       async (tx) => {
-        const clash = await tx.reservation.findFirst({
-          where: {
-            tableId,
-            status: { notIn: ["Cancelled", "NoShow"] },
-            startDateTime: { lt: new Date(end.getTime() + bufferMs) },
-            endDateTime: { gt: new Date(start.getTime() - bufferMs) },
-          },
-          select: { id: true },
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${dateStr}T${time}`})::bigint)`;
+        const assigned = await assignTableTx(tx, {
+          requestedTableId: input.tableId,
+          requestedArea: input.requestedArea,
+          partySize: input.partySize,
+          start,
+          end,
+          bufferMs,
         });
-        if (clash) throw new Error("SLOT_TAKEN");
+        if (!assigned) throw new Error("SLOT_TAKEN");
         return tx.reservation.create({
           data: {
-            tableId,
+            tableId: assigned.id,
             customerId: customer.id,
             startDateTime: start,
             endDateTime: end,
@@ -219,10 +241,11 @@ export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reserva
             status: "Confirmed",
             notes: input.notes || null,
             source: "Walk-in",
+            requestedArea: input.requestedArea,
           },
         });
       },
-      { timeout: 15000, maxWait: 10000 },
+      { timeout: 20000, maxWait: 12000 },
     );
     await sendNotification(reservation.id, "BookingConfirmation");
     revalidateAdmin();
@@ -283,7 +306,19 @@ export async function rescheduleReservation(
 export async function upsertTable(id: string | null, raw: unknown): Promise<ActionResult> {
   const parsed = tableSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-  const data = parsed.data;
+  const p = parsed.data;
+  const data = {
+    name: p.name,
+    seats: p.seats,
+    section: p.section,
+    areaId: p.areaId || null,
+    shape: p.shape,
+    x: p.x,
+    y: p.y,
+    w: p.w,
+    h: p.h,
+    isActive: p.isActive,
+  };
   if (id) {
     await prisma.restaurantTable.update({ where: { id }, data });
   } else {
@@ -292,6 +327,33 @@ export async function upsertTable(id: string | null, raw: unknown): Promise<Acti
   }
   revalidatePath("/dashboard/tables");
   revalidatePath("/dashboard/floor");
+  return { ok: true };
+}
+
+// ---- Areas -----------------------------------------------------------------
+export async function addArea(raw: unknown): Promise<ActionResult> {
+  const parsed = areaSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const count = await prisma.area.count();
+  await prisma.area.create({ data: { ...parsed.data, sortOrder: count + 1 } });
+  revalidatePath("/dashboard/tables");
+  revalidatePath("/dashboard/floor");
+  return { ok: true };
+}
+
+export async function toggleAreaOpen(id: string, isOpen: boolean): Promise<ActionResult> {
+  await prisma.area.update({ where: { id }, data: { isOpen } });
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/floor");
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+export async function deleteArea(id: string): Promise<ActionResult> {
+  const tableCount = await prisma.restaurantTable.count({ where: { areaId: id } });
+  if (tableCount > 0) return { ok: false, error: "Move or delete this area's tables first." };
+  await prisma.area.delete({ where: { id } });
+  revalidatePath("/dashboard/tables");
   return { ok: true };
 }
 
@@ -387,6 +449,7 @@ export async function addSlotLimit(raw: unknown): Promise<ActionResult> {
     data: {
       dayOfWeek: parsed.data.dayOfWeek < 0 ? null : parsed.data.dayOfWeek,
       time: parsed.data.time,
+      areaKind: parsed.data.areaKind === "global" ? null : parsed.data.areaKind,
       maxReservations: parsed.data.maxReservations,
       maxCovers: parsed.data.maxCovers ?? null,
     },

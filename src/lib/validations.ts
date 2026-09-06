@@ -10,16 +10,20 @@ export const customerDetailsSchema = z.object({
 
 export type CustomerDetailsInput = z.infer<typeof customerDetailsSchema>;
 
+export const areaEnum = z.enum(["indoor", "outdoor", "no_preference"]);
+
 export const createReservationSchema = customerDetailsSchema.extend({
   tableId: z.string().min(1, "Select a table"),
   start: z.string().min(1),
   partySize: z.coerce.number().int().min(1).max(30),
+  requestedArea: areaEnum.default("no_preference"),
 });
 
 export const walkInSchema = z.object({
   tableId: z.string().min(1),
   start: z.string().min(1),
   partySize: z.coerce.number().int().min(1).max(30),
+  requestedArea: areaEnum.default("no_preference"),
   firstName: z.string().trim().min(1, "First name is required").max(60),
   lastName: z.string().trim().max(60).optional().or(z.literal("")),
   phone: z.string().trim().min(6, "Phone is required").max(30),
@@ -30,12 +34,20 @@ export const tableSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(40),
   seats: z.coerce.number().int().min(1).max(30),
   section: z.string().trim().min(1, "Section is required").max(40),
+  areaId: z.string().optional().or(z.literal("")),
   shape: z.enum(["square", "round", "rect"]).default("square"),
   x: z.coerce.number().int().min(0).max(11),
   y: z.coerce.number().int().min(0).max(7),
   w: z.coerce.number().int().min(1).max(4),
   h: z.coerce.number().int().min(1).max(4),
   isActive: z.boolean().default(true),
+});
+
+export const areaSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(40),
+  kind: z.enum(["indoor", "outdoor"]).default("indoor"),
+  weatherDependent: z.boolean().default(false),
+  priority: z.coerce.number().int().min(0).max(99).default(0),
 });
 
 export const openingHourSchema = z.object({
@@ -69,6 +81,7 @@ export const settingsSchema = z.object({
 export const slotLimitSchema = z.object({
   dayOfWeek: z.coerce.number().int().min(-1).max(6), // -1 = every day
   time: z.string().regex(/^\d{2}:\d{2}$/),
+  areaKind: z.enum(["global", "indoor", "outdoor"]).default("global"),
   maxReservations: z.coerce.number().int().min(0).max(200),
   maxCovers: z.coerce.number().int().min(0).max(1000).optional(),
 });

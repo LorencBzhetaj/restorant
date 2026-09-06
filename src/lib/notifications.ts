@@ -23,6 +23,9 @@ interface Ctx {
   phone: string;
   start: Date;
   cancelUrl: string;
+  notes: string | null;
+  area: string | null;
+  weatherDependent: boolean;
 }
 
 function layout(brand: string, title: string, bodyHtml: string, footer?: string): string {
@@ -48,6 +51,8 @@ function detailsTable(ctx: Ctx): string {
     ["Date", formatDateLong(ctx.start)],
     ["Time", formatTime(ctx.start)],
     ["Table", ctx.tableName],
+    ...(ctx.area ? [["Area", ctx.area] as [string, string]] : []),
+    ...(ctx.notes ? [["Special requests", ctx.notes] as [string, string]] : []),
   ];
   return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 20px">
     ${rows
@@ -83,6 +88,11 @@ function buildEmails(
           `Your table at ${ctx.restaurantName} is confirmed`,
           `<p style="font-size:14px;color:#44403c">Hi ${first}, thanks for booking with us. Here are your details:</p>
            ${details}
+           ${
+             ctx.weatherDependent
+               ? `<p style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin:0 0 16px">Your reservation is for the <strong>outdoor</strong> area. In case of unfavourable weather, we will contact you to confirm availability indoors.</p>`
+               : ""
+           }
            <p style="font-size:14px;color:#44403c;margin-bottom:16px">Plans changed? You can cancel your reservation with one click:</p>
            ${button(ctx.cancelUrl, "Cancel my reservation", "#be123c")}`,
           `${ctx.restaurantName}${ctx.address ? ` · ${ctx.address}` : ""}${ctx.phone ? ` · ${ctx.phone}` : ""}`,
@@ -148,11 +158,12 @@ function buildEmails(
 export async function sendNotification(reservationId: string, type: NotificationType) {
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { customer: true, table: true },
+    include: { customer: true, table: { include: { area: true } } },
   });
   if (!reservation) return null;
 
   const settings = await prisma.restaurantSetting.findFirst();
+  const area = reservation.table.area;
   const ctx: Ctx = {
     customerName: `${reservation.customer.firstName} ${reservation.customer.lastName}`.trim(),
     customerEmail: reservation.customer.email,
@@ -164,6 +175,9 @@ export async function sendNotification(reservationId: string, type: Notification
     phone: reservation.customer.phone,
     start: new Date(reservation.startDateTime),
     cancelUrl: `${appUrl()}/r/${reservation.cancelToken}`,
+    notes: reservation.notes,
+    area: area?.name ?? null,
+    weatherDependent: area?.kind === "outdoor" && (area?.weatherDependent ?? false),
   };
 
   const emails = buildEmails(type, ctx);

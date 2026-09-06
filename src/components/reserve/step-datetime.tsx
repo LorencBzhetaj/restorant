@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, CalendarX2, Sun, Moon, Users, Minus, Plus } from "lucide-react";
+import { Loader2, CalendarX2, Sun, Moon, Users, Minus, Plus, Home, Trees } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toDateKey, pad2 } from "@/lib/format";
 import { DAY_NAMES_SHORT } from "@/lib/constants";
@@ -12,6 +12,8 @@ interface Slot {
   start: string;
   freeTables: number;
 }
+
+type Area = "no_preference" | "indoor" | "outdoor";
 
 function buildDays(count: number) {
   const out: { key: string; date: Date; label: string }[] = [];
@@ -26,10 +28,20 @@ function buildDays(count: number) {
   return out;
 }
 
-export function StepDateTime({ maxParty }: { maxParty: number }) {
+export function StepDateTime({
+  maxParty,
+  hasIndoor,
+  hasOutdoor,
+}: {
+  maxParty: number;
+  hasIndoor: boolean;
+  hasOutdoor: boolean;
+}) {
   const router = useRouter();
   const days = useMemo(() => buildDays(14), []);
+  const showAreas = hasIndoor && hasOutdoor;
   const [party, setParty] = useState(2);
+  const [area, setArea] = useState<Area>("no_preference");
   const [date, setDate] = useState(days[0].key);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +49,7 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    fetch(`/api/availability?date=${date}&party=${party}`)
+    fetch(`/api/availability?date=${date}&party=${party}&area=${area}`)
       .then((r) => r.json())
       .then((d) => active && setSlots(d.slots ?? []))
       .catch(() => active && setSlots([]))
@@ -45,7 +57,7 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
     return () => {
       active = false;
     };
-  }, [date, party]);
+  }, [date, party, area]);
 
   const groups = [
     { key: "lunch", label: "Lunch", icon: Sun, items: slots.filter((s) => Number(s.time.split(":")[0]) < 16) },
@@ -53,10 +65,21 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
   ].filter((g) => g.items.length > 0);
 
   function choose(slot: Slot) {
-    // Table is assigned automatically — go straight to the details step.
-    const params = new URLSearchParams({ date, party: String(party), start: slot.start, tableId: "any" });
+    const params = new URLSearchParams({
+      date,
+      party: String(party),
+      start: slot.start,
+      tableId: "any",
+      area,
+    });
     router.push(`/reserve/details?${params.toString()}`);
   }
+
+  const AREA_OPTS: { key: Area; label: string; icon: React.ElementType }[] = [
+    { key: "no_preference", label: "No preference", icon: Users },
+    { key: "indoor", label: "Indoor", icon: Home },
+    { key: "outdoor", label: "Outdoor", icon: Trees },
+  ];
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -66,7 +89,7 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
       </div>
 
       {/* Party size */}
-      <div className="mb-6 rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between">
           <span className="inline-flex items-center gap-2 font-medium">
             <Users className="size-4 text-brand" /> Party size
@@ -97,6 +120,34 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
           </p>
         )}
       </div>
+
+      {/* Area */}
+      {showAreas && (
+        <div className="mb-6 rounded-xl border border-border bg-card p-5">
+          <span className="mb-3 inline-flex items-center gap-2 font-medium">
+            <Trees className="size-4 text-brand" /> Seating area
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {AREA_OPTS.map((o) => (
+              <button
+                key={o.key}
+                onClick={() => setArea(o.key)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm font-medium transition-colors",
+                  area === o.key ? "border-brand bg-brand/10 text-foreground" : "border-border hover:border-brand/50 text-muted-foreground",
+                )}
+              >
+                <o.icon className="size-4" /> {o.label}
+              </button>
+            ))}
+          </div>
+          {area === "outdoor" && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Outdoor seating depends on the weather. If conditions change, we&apos;ll contact you to move you indoors.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Date */}
       <div className="scrollbar-thin -mx-1 mb-8 flex gap-2 overflow-x-auto px-1 pb-2">
@@ -131,7 +182,9 @@ export function StepDateTime({ maxParty }: { maxParty: number }) {
             <CalendarX2 className="size-8 text-muted-foreground" />
             <div>
               <p className="font-medium">No tables available</p>
-              <p className="mt-1 text-sm text-muted-foreground">Try another date or a smaller party.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {area === "outdoor" ? "Outdoor may be closed — try Indoor, another date or a smaller party." : "Try another date or a smaller party."}
+              </p>
             </div>
           </div>
         ) : (
