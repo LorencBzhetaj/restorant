@@ -5,7 +5,6 @@ import {
   CalendarDays,
   Users,
   CalendarClock,
-  Wallet,
   TrendingUp,
   CheckCircle2,
   XCircle,
@@ -13,7 +12,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { getDashboardData } from "@/server/data";
-import { formatMoney, formatTime, formatDate, currencySymbol } from "@/lib/format";
+import { formatTime, formatDate } from "@/lib/format";
 import { StatCard } from "@/components/admin/stat-card";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { RevenueChart, AppointmentsChart, HorizontalCountChart } from "@/components/admin/charts";
@@ -22,8 +21,6 @@ export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const d = await getDashboardData();
-  const cur = d.settings.currency;
-  const sym = currencySymbol(cur);
 
   return (
     <div className="space-y-6">
@@ -31,16 +28,16 @@ export default async function DashboardPage() {
         <StatCard label="Today's reservations" value={d.cards.todayCount} icon={CalendarDays} accent="brand" />
         <StatCard label="Covers today" value={d.cards.coversToday} icon={Users} accent="blue" hint="Guests booked" />
         <StatCard label="Upcoming" value={d.cards.upcoming} icon={CalendarClock} accent="blue" hint="Confirmed & future" />
-        <StatCard label="Est. revenue today" value={formatMoney(d.cards.revenueToday, cur)} icon={Wallet} accent="emerald" />
         <StatCard label="Completed today" value={d.cards.completedToday} icon={CheckCircle2} accent="emerald" />
         <StatCard label="Cancelled today" value={d.cards.cancelledToday} icon={XCircle} accent="rose" />
         <StatCard label="No-shows today" value={d.cards.noShowToday} icon={UserX} accent="amber" />
-        <StatCard label="Est. revenue (month)" value={formatMoney(d.cards.revenueMonth, cur)} icon={TrendingUp} accent="emerald" hint="Completed this month" />
+        <StatCard label="Reservations (month)" value={d.cards.reservationsMonth} icon={CalendarDays} accent="brand" />
+        <StatCard label="Covers (month)" value={d.cards.coversMonth} icon={TrendingUp} accent="blue" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Estimated revenue" subtitle="Last 14 days">
-          <RevenueChart data={d.days} currency={sym} />
+        <ChartCard title="Covers" subtitle="Last 14 days">
+          <RevenueChart data={d.days.map((x) => ({ label: x.label, revenue: x.covers, appointments: x.appointments }))} currency="" />
         </ChartCard>
         <ChartCard title="Reservations" subtitle="Last 14 days">
           <AppointmentsChart data={d.days} />

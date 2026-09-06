@@ -17,6 +17,7 @@ interface Ctx {
   customerEmail: string | null;
   ownerEmail: string | null;
   restaurantName: string;
+  address: string;
   tableName: string;
   partySize: number;
   phone: string;
@@ -24,12 +25,12 @@ interface Ctx {
   cancelUrl: string;
 }
 
-function layout(title: string, bodyHtml: string, footer?: string): string {
+function layout(brand: string, title: string, bodyHtml: string, footer?: string): string {
   return `
   <div style="background:#f6f5f3;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
     <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #eee">
       <div style="background:${BRAND};padding:20px 24px">
-        <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.5px">Terrazza</span>
+        <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.5px">${brand}</span>
       </div>
       <div style="padding:24px">
         <h1 style="margin:0 0 12px;font-size:20px">${title}</h1>
@@ -72,7 +73,7 @@ function buildEmails(
   const details = detailsTable(ctx);
 
   const mk = (to: string | null, subject: string, inner: string, footer?: string): EmailMessage | null =>
-    to ? { to, subject, html: layout(subject, inner, footer), text: `${subject}\n\n${ctx.customerName} · ${ctx.partySize} guests · ${when} · ${ctx.tableName}` } : null;
+    to ? { to, subject, html: layout(ctx.restaurantName, subject, inner, footer), text: `${subject}\n\n${ctx.customerName} · ${ctx.partySize} guests · ${when} · ${ctx.tableName}` } : null;
 
   switch (type) {
     case "BookingConfirmation":
@@ -84,7 +85,7 @@ function buildEmails(
            ${details}
            <p style="font-size:14px;color:#44403c;margin-bottom:16px">Plans changed? You can cancel your reservation with one click:</p>
            ${button(ctx.cancelUrl, "Cancel my reservation", "#be123c")}`,
-          `Terrazza · Rruga Ismail Qemali 15, Tirana · ${ctx.phone}`,
+          `${ctx.restaurantName}${ctx.address ? ` · ${ctx.address}` : ""}${ctx.phone ? ` · ${ctx.phone}` : ""}`,
         ),
         owner: mk(
           ctx.ownerEmail,
@@ -156,7 +157,8 @@ export async function sendNotification(reservationId: string, type: Notification
     customerName: `${reservation.customer.firstName} ${reservation.customer.lastName}`.trim(),
     customerEmail: reservation.customer.email,
     ownerEmail: settings?.email ?? null,
-    restaurantName: settings?.name ?? "Terrazza",
+    restaurantName: settings?.name ?? "Gjeçaj Alpine Restaurant Cuisine",
+    address: settings?.address ?? "",
     tableName: `${reservation.table.name} · ${reservation.table.section}`,
     partySize: reservation.partySize,
     phone: reservation.customer.phone,

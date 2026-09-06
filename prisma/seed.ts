@@ -72,7 +72,7 @@ async function main() {
 
   await prisma.restaurantSetting.create({
     data: {
-      name: "Terrazza",
+      name: "Gjeçaj Alpine Restaurant Cuisine",
       tagline: "Modern Mediterranean dining in the heart of Tirana",
       phone: "+355 69 987 6543",
       whatsapp: "+355 69 987 6543",

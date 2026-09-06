@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createReservation } from "@/server/actions";
 import { appUrl } from "@/lib/email";
 import { json, preflight } from "@/lib/cors";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function OPTIONS(req: NextRequest) {
   return preflight(req.headers.get("origin"));
@@ -14,6 +15,11 @@ export async function OPTIONS(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
+
+  // Max 8 reservation attempts per minute per IP.
+  const rl = rateLimit(`resv:${clientIp(req)}`, 8, 60_000);
+  if (!rl.ok) return json({ ok: false, error: "Too many requests. Please slow down." }, origin, 429);
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();

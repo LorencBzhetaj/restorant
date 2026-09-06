@@ -5,9 +5,6 @@ import { toDateKey } from "@/lib/format";
 
 export { getRestaurant };
 
-/** Estimated average spend per guest, used for demo revenue figures. */
-export const AVG_SPEND_PER_COVER = 35;
-
 export async function getActiveTables() {
   return prisma.restaurantTable.findMany({
     where: { isActive: true },
@@ -44,7 +41,6 @@ export async function getCustomers() {
       total: c.reservations.length,
       completed: completed.length,
       covers,
-      totalSpent: covers * AVG_SPEND_PER_COVER,
       lastVisit: lastVisit ?? null,
     };
   });
@@ -78,7 +74,6 @@ export async function getCustomerDetail(id: string) {
       cancelled: c.reservations.filter((r) => r.status === "Cancelled").length,
       noShows: c.reservations.filter((r) => r.status === "NoShow").length,
       covers,
-      totalSpent: covers * AVG_SPEND_PER_COVER,
       lastVisit:
         completed.map((r) => r.startDateTime).sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
       favoriteSection: counter(completed.map((r) => r.table.section)),
@@ -114,6 +109,10 @@ export async function getClosures() {
   return prisma.closure.findMany({ orderBy: { startDate: "asc" } });
 }
 
+export async function getSlotLimits() {
+  return prisma.slotLimit.findMany({ orderBy: [{ time: "asc" }] });
+}
+
 export async function getDashboardData() {
   const settings = await getRestaurant();
   const now = new Date();
@@ -136,19 +135,18 @@ export async function getDashboardData() {
   const completedToday = todays.filter((r) => r.status === "Completed");
   const coversToday = coversOf(todays.filter((r) => active(r.status)));
 
-  const monthCompleted = all.filter((r) => r.status === "Completed" && r.startDateTime >= monthStart);
+  const monthReservations = all.filter((r) => active(r.status) && r.startDateTime >= monthStart);
 
-  const days: { label: string; revenue: number; appointments: number }[] = [];
+  const days: { label: string; covers: number; appointments: number }[] = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(todayStart);
     d.setDate(todayStart.getDate() - i);
     const key = toDateKey(d);
-    const dayRes = all.filter((r) => toDateKey(r.startDateTime) === key);
-    const covers = dayRes.filter((r) => r.status === "Completed").reduce((s, r) => s + r.partySize, 0);
+    const dayRes = all.filter((r) => toDateKey(r.startDateTime) === key && active(r.status));
     days.push({
       label: `${d.getDate()}/${d.getMonth() + 1}`,
-      revenue: covers * AVG_SPEND_PER_COVER,
-      appointments: dayRes.filter((r) => active(r.status)).length,
+      covers: dayRes.reduce((s, r) => s + r.partySize, 0),
+      appointments: dayRes.length,
     });
   }
 
@@ -185,8 +183,8 @@ export async function getDashboardData() {
       completedToday: completedToday.length,
       cancelledToday: todays.filter((r) => r.status === "Cancelled").length,
       noShowToday: todays.filter((r) => r.status === "NoShow").length,
-      revenueToday: coversOf(completedToday) * AVG_SPEND_PER_COVER,
-      revenueMonth: coversOf(monthCompleted) * AVG_SPEND_PER_COVER,
+      reservationsMonth: monthReservations.length,
+      coversMonth: coversOf(monthReservations),
     },
     days,
     sectionCounts,

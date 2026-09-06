@@ -33,6 +33,7 @@ export function ReserveForm({
 }) {
   const [pending, startTransition] = useTransition();
   const [success, setSuccess] = useState<null | { email: string; cancelToken: string }>(null);
+  const [agreed, setAgreed] = useState(false);
 
   const {
     register,
@@ -44,6 +45,7 @@ export function ReserveForm({
   });
 
   function onSubmit(values: CustomerDetailsInput) {
+    if (!agreed) return;
     startTransition(async () => {
       const res = await createReservation({ ...values, tableId, start, partySize });
       if (res.ok && res.data) setSuccess({ email: res.data.email, cancelToken: res.data.cancelToken });
@@ -100,7 +102,22 @@ export function ReserveForm({
         <Field label="Special requests" hint="Optional" error={errors.notes?.message}>
           <Textarea {...register("notes")} placeholder="Allergies, celebrations, seating preferences…" rows={3} />
         </Field>
-        <Button type="submit" size="lg" className="w-full" disabled={pending}>
+        <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-0.5 size-4 accent-[var(--brand)]"
+          />
+          <span>
+            I agree to the processing of my details for this reservation, as described in the{" "}
+            <Link href="/privacy" target="_blank" className="font-medium text-foreground underline underline-offset-2">
+              privacy policy
+            </Link>
+            .
+          </span>
+        </label>
+        <Button type="submit" size="lg" className="w-full" disabled={pending || !agreed}>
           {pending ? <><Loader2 className="size-4 animate-spin" /> Reserving…</> : "Confirm reservation"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">

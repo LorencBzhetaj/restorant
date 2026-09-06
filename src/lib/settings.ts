@@ -1,12 +1,12 @@
 import { prisma } from "./prisma";
 
 export const DEFAULT_SETTINGS = {
-  name: "Terrazza",
-  tagline: "Modern Mediterranean dining in the heart of Tirana",
+  name: "Gjeçaj Alpine Restaurant Cuisine",
+  tagline: "Alpine cuisine in the Albanian mountains",
   phone: "+355 69 987 6543",
-  whatsapp: "+355 69 987 6543",
-  address: "Rruga Ismail Qemali 15, Tirana, Albania",
-  email: "reservations@terrazza.al",
+  whatsapp: "",
+  address: "Theth, Shkodër, Albania",
+  email: "info@villagjecaj.com",
   currency: "EUR",
   turnDurationMinutes: 120,
   bookingInterval: 30,

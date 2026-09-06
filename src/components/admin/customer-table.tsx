@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 interface Row {
   id: string;
@@ -16,11 +16,11 @@ interface Row {
   phone: string;
   total: number;
   completed: number;
-  totalSpent: number;
+  covers: number;
   lastVisit: Date | string | null;
 }
 
-export function CustomerTable({ customers, currency }: { customers: Row[]; currency: string }) {
+export function CustomerTable({ customers }: { customers: Row[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const filtered = customers.filter((c) => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
@@ -44,7 +44,7 @@ export function CustomerTable({ customers, currency }: { customers: Row[]; curre
             <TableHead>Phone</TableHead>
             <TableHead className="text-center">Visits</TableHead>
             <TableHead className="text-center">Completed</TableHead>
-            <TableHead>Est. spend</TableHead>
+            <TableHead className="text-center">Guests</TableHead>
             <TableHead>Last visit</TableHead>
             <TableHead />
           </TableRow>
@@ -56,7 +56,7 @@ export function CustomerTable({ customers, currency }: { customers: Row[]; curre
               <TableCell className="text-muted-foreground">{c.phone}</TableCell>
               <TableCell className="text-center">{c.total}</TableCell>
               <TableCell className="text-center">{c.completed}</TableCell>
-              <TableCell className="font-medium">{formatMoney(c.totalSpent, currency)}</TableCell>
+              <TableCell className="text-center">{c.covers}</TableCell>
               <TableCell className="text-muted-foreground">{c.lastVisit ? formatDate(c.lastVisit) : "—"}</TableCell>
               <TableCell className="text-right"><ChevronRight className="size-4 text-muted-foreground" /></TableCell>
             </TableRow>

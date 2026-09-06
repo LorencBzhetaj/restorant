@@ -23,11 +23,11 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Terrazza — Tirana",
-    template: "%s · Terrazza",
+    default: "Gjeçaj Alpine Restaurant Cuisine",
+    template: "%s · Gjeçaj Alpine",
   },
   description:
-    "Terrazza — modern Mediterranean dining in the heart of Tirana. Reserve your table online in seconds.",
+    "Gjeçaj Alpine Restaurant Cuisine — reserve your table online in seconds.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

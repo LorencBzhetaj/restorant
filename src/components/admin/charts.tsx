@@ -17,13 +17,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
-interface DayPoint {
-  label: string;
-  revenue: number;
-  appointments: number;
-}
-
-export function RevenueChart({ data, currency = "€" }: { data: DayPoint[]; currency?: string }) {
+export function RevenueChart({ data, currency = "€" }: { data: { label: string; revenue: number }[]; currency?: string }) {
   const config = {
     revenue: { label: "Revenue", color: "var(--chart-1)" },
   } satisfies ChartConfig;
@@ -54,7 +48,7 @@ export function RevenueChart({ data, currency = "€" }: { data: DayPoint[]; cur
   );
 }
 
-export function AppointmentsChart({ data }: { data: DayPoint[] }) {
+export function AppointmentsChart({ data }: { data: { label: string; appointments: number }[] }) {
   const config = {
     appointments: { label: "Appointments", color: "var(--chart-2)" },
   } satisfies ChartConfig;

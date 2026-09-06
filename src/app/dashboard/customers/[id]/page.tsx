@@ -3,8 +3,8 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Phone, MessageCircle, Mail, MapPin, Users, CalendarCheck } from "lucide-react";
-import { getCustomerDetail, getRestaurant } from "@/server/data";
-import { formatMoney, formatDate, formatTime } from "@/lib/format";
+import { getCustomerDetail } from "@/server/data";
+import { formatDate, formatTime } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { CustomerNotes } from "@/components/admin/customer-notes";
 import {
@@ -15,9 +15,8 @@ export const metadata = { title: "Guest" };
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [customer, settings] = await Promise.all([getCustomerDetail(id), getRestaurant()]);
+  const customer = await getCustomerDetail(id);
   if (!customer) notFound();
-  const cur = settings.currency;
   const s = customer.stats;
 
   return (
@@ -58,7 +57,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <MiniStat label="Cancelled" value={s.cancelled} />
             <MiniStat label="No-shows" value={s.noShows} />
             <MiniStat label="Total guests" value={s.covers} icon={Users} />
-            <MiniStat label="Est. spend" value={formatMoney(s.totalSpent, cur)} />
+            <MiniStat label="Last visit" value={s.lastVisit ? formatDate(s.lastVisit) : "—"} />
             <MiniStat label="Avg party" value={s.avgPartySize || "—"} />
             <MiniStat label="Favourite area" value={s.favoriteSection ?? "—"} icon={MapPin} />
           </div>

@@ -62,4 +62,13 @@ export const settingsSchema = z.object({
   bookingInterval: z.coerce.number().int().min(15).max(120),
   seatingBuffer: z.coerce.number().int().min(0).max(120),
   maxPartySize: z.coerce.number().int().min(1).max(30),
+  maxReservationsPerSlot: z.coerce.number().int().min(0).max(200),
+  maxCoversPerSlot: z.coerce.number().int().min(0).max(1000),
+});
+
+export const slotLimitSchema = z.object({
+  dayOfWeek: z.coerce.number().int().min(-1).max(6), // -1 = every day
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  maxReservations: z.coerce.number().int().min(0).max(200),
+  maxCovers: z.coerce.number().int().min(0).max(1000).optional(),
 });

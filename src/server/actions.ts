@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isTableBookable, pickTableForSlot, getSettings } from "@/lib/availability";
+import { isTableBookable, pickTableForSlot, getSettings, slotHasCapacity } from "@/lib/availability";
 import { sendNotification } from "@/lib/notifications";
 import { toDateKey, pad2 } from "@/lib/format";
 import {
@@ -12,6 +13,7 @@ import {
   openingHourSchema,
   closureSchema,
   settingsSchema,
+  slotLimitSchema,
 } from "@/lib/validations";
 import { ReservationStatus, NotificationType } from "@/lib/constants";
 
@@ -52,6 +54,37 @@ function timeOf(d: Date) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+/**
+ * Assign a free table INSIDE the booking transaction (race-safe under the
+ * per-slot advisory lock). For "any", picks the smallest suitable free table;
+ * for a specific table, returns it only if still free. Returns null if none.
+ */
+async function assignTableTx(
+  tx: Prisma.TransactionClient,
+  p: { requestedTableId: string; partySize: number; start: Date; end: Date; bufferMs: number },
+): Promise<string | null> {
+  const busy = await tx.reservation.findMany({
+    where: {
+      status: { notIn: ["Cancelled", "NoShow"] },
+      startDateTime: { lt: new Date(p.end.getTime() + p.bufferMs) },
+      endDateTime: { gt: new Date(p.start.getTime() - p.bufferMs) },
+    },
+    select: { tableId: true },
+  });
+  const busyIds = new Set(busy.map((b) => b.tableId));
+
+  if (p.requestedTableId !== "any") {
+    return busyIds.has(p.requestedTableId) ? null : p.requestedTableId;
+  }
+
+  const tables = await tx.restaurantTable.findMany({
+    where: { isActive: true, seats: { gte: p.partySize } },
+    orderBy: [{ seats: "asc" }, { sortOrder: "asc" }],
+    select: { id: true },
+  });
+  return tables.find((t) => !busyIds.has(t.id))?.id ?? null;
+}
+
 export async function createReservation(
   raw: unknown,
 ): Promise<ActionResult<{ reservationId: string; cancelToken: string; email: string }>> {
@@ -65,38 +98,39 @@ export async function createReservation(
 
   const settings = await getSettings();
 
-  // Resolve a concrete table ("any table" -> smallest suitable free table).
-  let tableId = input.tableId;
-  if (tableId === "any") {
-    const picked = await pickTableForSlot({
-      dateStr: toDateKey(start),
-      time: timeOf(start),
-      partySize: input.partySize,
-    });
-    if (!picked) return { ok: false, error: "No tables available at that time. Please pick another slot." };
-    tableId = picked;
+  // A concrete table given by the client still gets a fast pre-check; the
+  // authoritative assignment (incl. "any") happens INSIDE the locked transaction.
+  const isAny = input.tableId === "any";
+  if (!isAny) {
+    const bookable = await isTableBookable({ tableId: input.tableId, start, partySize: input.partySize });
+    if (!bookable) return { ok: false, error: "That table is no longer available. Please pick another slot." };
   }
-
-  const bookable = await isTableBookable({ tableId, start, partySize: input.partySize });
-  if (!bookable) return { ok: false, error: "That table is no longer available. Please pick another slot." };
 
   const end = new Date(start.getTime() + settings.turnDurationMinutes * 60000);
   const bufferMs = settings.seatingBuffer * 60000;
+  const dateStr = toDateKey(start);
+  const time = timeOf(start);
 
   try {
     const customer = await findOrCreateCustomer(input);
     const reservation = await prisma.$transaction(
       async (tx) => {
-        const clash = await tx.reservation.findFirst({
-          where: {
-            tableId,
-            status: { notIn: ["Cancelled", "NoShow"] },
-            startDateTime: { lt: new Date(end.getTime() + bufferMs) },
-            endDateTime: { gt: new Date(start.getTime() - bufferMs) },
-          },
-          select: { id: true },
+        // Serialize concurrent bookings for the SAME slot so caps + table
+        // assignment are race-safe (each concurrent booking gets a distinct table).
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${dateStr}T${time}`})::bigint)`;
+        if (!(await slotHasCapacity(tx, { dateStr, time, partySize: input.partySize }))) {
+          throw new Error("SLOT_FULL");
+        }
+
+        const tableId = await assignTableTx(tx, {
+          requestedTableId: input.tableId,
+          partySize: input.partySize,
+          start,
+          end,
+          bufferMs,
         });
-        if (clash) throw new Error("SLOT_TAKEN");
+        if (!tableId) throw new Error(isAny ? "NO_TABLE" : "SLOT_TAKEN");
+
         return tx.reservation.create({
           data: {
             tableId,
@@ -110,13 +144,16 @@ export async function createReservation(
           },
         });
       },
-      { timeout: 15000, maxWait: 10000 },
+      { timeout: 20000, maxWait: 12000 },
     );
 
     await sendNotification(reservation.id, "BookingConfirmation");
     revalidateAdmin();
     return { ok: true, data: { reservationId: reservation.id, cancelToken: reservation.cancelToken, email: input.email } };
   } catch (e) {
+    if (e instanceof Error && (e.message === "SLOT_FULL" || e.message === "NO_TABLE")) {
+      return { ok: false, error: "That time is fully booked. Please pick another slot." };
+    }
     if (e instanceof Error && e.message === "SLOT_TAKEN") {
       return { ok: false, error: "That table was just booked. Please pick another slot." };
     }
@@ -328,6 +365,8 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
     bookingInterval: parsed.data.bookingInterval,
     seatingBuffer: parsed.data.seatingBuffer,
     maxPartySize: parsed.data.maxPartySize,
+    maxReservationsPerSlot: parsed.data.maxReservationsPerSlot,
+    maxCoversPerSlot: parsed.data.maxCoversPerSlot,
   };
   if (existing) {
     await prisma.restaurantSetting.update({ where: { id: existing.id }, data });
@@ -337,5 +376,27 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
   revalidatePath("/");
+  return { ok: true };
+}
+
+// ---- Per-slot limits -------------------------------------------------------
+export async function addSlotLimit(raw: unknown): Promise<ActionResult> {
+  const parsed = slotLimitSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  await prisma.slotLimit.create({
+    data: {
+      dayOfWeek: parsed.data.dayOfWeek < 0 ? null : parsed.data.dayOfWeek,
+      time: parsed.data.time,
+      maxReservations: parsed.data.maxReservations,
+      maxCovers: parsed.data.maxCovers ?? null,
+    },
+  });
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function deleteSlotLimit(id: string): Promise<ActionResult> {
+  await prisma.slotLimit.delete({ where: { id } });
+  revalidatePath("/dashboard/settings");
   return { ok: true };
 }

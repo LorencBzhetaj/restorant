@@ -1,4 +1,4 @@
-// Terrazza — restaurant table reservation demo
+// Gjeçaj Alpine Restaurant Cuisine — restaurant table reservation
 // SQLite for the local demo; schema kept clean for a PostgreSQL migration.
 
 generator client {
@@ -119,6 +119,21 @@ model RestaurantSetting {
   bookingInterval     Int      @default(30) // slot granularity, minutes
   seatingBuffer       Int      @default(15) // minutes between bookings on the same table
   maxPartySize        Int      @default(12)
+  // Capacity caps per time slot (0 = no cap; capacity then limited only by tables)
+  maxReservationsPerSlot Int   @default(0)
+  maxCoversPerSlot       Int   @default(0)
   timezone            String   @default("Europe/Tirane")
   updatedAt           DateTime @updatedAt
+}
+
+// Per-time overrides for the slot caps, e.g. "max 4 reservations at 18:00".
+// dayOfWeek = null applies to every day.
+model SlotLimit {
+  id              String @id @default(cuid())
+  dayOfWeek       Int?
+  time            String // "HH:mm" (reservation start time)
+  maxReservations Int
+  maxCovers       Int?
+
+  @@index([time])
 }

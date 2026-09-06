@@ -10,9 +10,11 @@ import {
   Armchair,
   Settings,
   ExternalLink,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/site/brand-mark";
+import { logout } from "@/server/auth-actions";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -64,7 +66,7 @@ export function AdminSidebar({
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
+      <div className="space-y-1 border-t border-sidebar-border p-3">
         <Link
           href="/reserve"
           target="_blank"
@@ -73,6 +75,14 @@ export function AdminSidebar({
         >
           <ExternalLink className="size-4.5" /> Booking page
         </Link>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+          >
+            <LogOut className="size-4.5" /> Sign out
+          </button>
+        </form>
       </div>
     </div>
   );

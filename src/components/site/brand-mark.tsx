@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export function BrandMark({
   className,
   light = false,
-  name = "Terrazza",
+  name = "Gjeçaj Alpine Restaurant Cuisine",
 }: {
   className?: string;
   light?: boolean;
@@ -18,7 +18,7 @@ export function BrandMark({
         )}
         aria-hidden
       >
-        T
+        {name.trim().charAt(0).toUpperCase() || "G"}
       </span>
       <span className="flex flex-col leading-none">
         <span
@@ -35,7 +35,7 @@ export function BrandMark({
             light ? "text-white/50" : "text-muted-foreground",
           )}
         >
-          Tirana
+          Alpine Cuisine
         </span>
       </span>
     </span>

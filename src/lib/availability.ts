@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { pad2, toDateKey } from "./format";
 
@@ -54,6 +55,37 @@ export async function getSettings(): Promise<Settings> {
     seatingBuffer: s?.seatingBuffer ?? 15,
     maxPartySize: s?.maxPartySize ?? 12,
   };
+}
+
+export interface SlotCaps {
+  defaultMaxRes: number; // 0 = no cap
+  defaultMaxCovers: number; // 0 = no cap
+  limits: { dayOfWeek: number | null; time: string; maxReservations: number; maxCovers: number | null }[];
+}
+
+export async function getSlotCaps(): Promise<SlotCaps> {
+  const s = await prisma.restaurantSetting.findFirst();
+  const limits = await prisma.slotLimit.findMany();
+  return {
+    defaultMaxRes: s?.maxReservationsPerSlot ?? 0,
+    defaultMaxCovers: s?.maxCoversPerSlot ?? 0,
+    limits: limits.map((l) => ({
+      dayOfWeek: l.dayOfWeek,
+      time: l.time,
+      maxReservations: l.maxReservations,
+      maxCovers: l.maxCovers,
+    })),
+  };
+}
+
+/** Resolve the effective caps for a given weekday + start time (specific overrides win). */
+export function capForSlot(caps: SlotCaps, dayOfWeek: number, time: string): { maxRes: number; maxCovers: number } {
+  const matches = caps.limits
+    .filter((l) => l.time === time && (l.dayOfWeek === null || l.dayOfWeek === dayOfWeek))
+    .sort((a, b) => (a.dayOfWeek === null ? 1 : 0) - (b.dayOfWeek === null ? 1 : 0));
+  const chosen = matches[0];
+  if (chosen) return { maxRes: chosen.maxReservations, maxCovers: chosen.maxCovers ?? caps.defaultMaxCovers };
+  return { maxRes: caps.defaultMaxRes, maxCovers: caps.defaultMaxCovers };
 }
 
 async function getPeriodsForDay(dayOfWeek: number): Promise<Period[]> {
@@ -156,8 +188,10 @@ export async function getAvailableTimes(params: {
       startDateTime: { lte: dayEnd },
       endDateTime: { gte: dayStart },
     },
-    select: { tableId: true, startDateTime: true, endDateTime: true },
+    select: { tableId: true, startDateTime: true, endDateTime: true, partySize: true },
   });
+
+  const caps = await getSlotCaps();
 
   const slots: TimeSlot[] = [];
   for (const period of periods) {
@@ -165,6 +199,7 @@ export async function getAvailableTimes(params: {
       const start = buildDate(dateStr, t);
       const end = new Date(start.getTime() + turn * 60000);
       if (start <= now) continue;
+      const timeStr = `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`;
 
       let freeTables = 0;
       for (const table of tables) {
@@ -180,12 +215,53 @@ export async function getAvailableTimes(params: {
         );
         if (!clash) freeTables++;
       }
-      if (freeTables > 0) {
-        slots.push({ time: `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`, start: start.toISOString(), freeTables });
+      if (freeTables === 0) continue;
+
+      // Apply per-slot caps (max reservations / max covers at this exact start time).
+      const { maxRes, maxCovers } = capForSlot(caps, dayOfWeek, timeStr);
+      const atSlot = reservations.filter((r) => new Date(r.startDateTime).getTime() === start.getTime());
+      if (maxRes > 0) {
+        const remaining = maxRes - atSlot.length;
+        if (remaining <= 0) continue;
+        freeTables = Math.min(freeTables, remaining);
       }
+      if (maxCovers > 0) {
+        const usedCovers = atSlot.reduce((s, r) => s + r.partySize, 0);
+        if (usedCovers + partySize > maxCovers) continue;
+      }
+
+      slots.push({ time: timeStr, start: start.toISOString(), freeTables });
     }
   }
   return slots;
+}
+
+/**
+ * Race-safe capacity check for the per-slot caps, run INSIDE the booking
+ * transaction (after an advisory lock on the slot) so concurrent requests
+ * for the last spot cannot exceed the cap.
+ */
+export async function slotHasCapacity(
+  client: Prisma.TransactionClient,
+  params: { dateStr: string; time: string; partySize: number; ignoreReservationId?: string },
+): Promise<boolean> {
+  const caps = await getSlotCaps();
+  const dow = buildDate(params.dateStr, 0).getDay();
+  const { maxRes, maxCovers } = capForSlot(caps, dow, params.time);
+  if (maxRes <= 0 && maxCovers <= 0) return true;
+
+  const start = buildDate(params.dateStr, hhmmToMinutes(params.time));
+  const atSlot = await client.reservation.findMany({
+    where: {
+      status: { notIn: ["Cancelled", "NoShow"] },
+      startDateTime: start,
+      ...(params.ignoreReservationId ? { id: { not: params.ignoreReservationId } } : {}),
+    },
+    select: { partySize: true },
+  });
+  if (maxRes > 0 && atSlot.length >= maxRes) return false;
+  if (maxCovers > 0 && atSlot.reduce((s, r) => s + r.partySize, 0) + params.partySize > maxCovers) return false;
+  return true;
 }
 
 /** Smallest suitable free table for a slot (used for "Any table"). */

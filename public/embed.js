@@ -1,5 +1,5 @@
 /**
- * Terrazza reservation widget — drop-in embed for any site (e.g. WordPress).
+ * Gjeçaj Alpine — reservation widget — drop-in embed for any site (e.g. WordPress).
  *
  * Usage (paste where you want the widget to appear):
  *   <script src="https://YOUR-DOMAIN/embed.js" data-origin="https://YOUR-DOMAIN"></script>

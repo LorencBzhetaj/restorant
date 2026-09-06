@@ -13,22 +13,26 @@ import { DAY_NAMES } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import {
   updateSettings, addOpeningHour, deleteOpeningHour, addClosure, deleteClosure,
+  addSlotLimit, deleteSlotLimit,
 } from "@/server/actions";
 
 interface Settings {
   name: string; tagline: string | null; phone: string | null; whatsapp: string | null;
   address: string | null; email: string | null; currency: string;
   turnDurationMinutes: number; bookingInterval: number; seatingBuffer: number; maxPartySize: number;
+  maxReservationsPerSlot: number; maxCoversPerSlot: number;
 }
 interface OpeningHour { id: string; dayOfWeek: number; startTime: string; endTime: string }
 interface Closure { id: string; startDate: string; endDate: string; reason: string | null }
+interface SlotLimit { id: string; dayOfWeek: number | null; time: string; maxReservations: number; maxCovers: number | null }
 
 export function SettingsForm({
-  settings, openingHours, closures,
+  settings, openingHours, closures, slotLimits,
 }: {
   settings: Settings;
   openingHours: OpeningHour[];
   closures: Closure[];
+  slotLimits: SlotLimit[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -37,6 +41,7 @@ export function SettingsForm({
     whatsapp: settings.whatsapp ?? "", address: settings.address ?? "", email: settings.email ?? "",
     currency: settings.currency, turnDurationMinutes: settings.turnDurationMinutes,
     bookingInterval: settings.bookingInterval, seatingBuffer: settings.seatingBuffer, maxPartySize: settings.maxPartySize,
+    maxReservationsPerSlot: settings.maxReservationsPerSlot, maxCoversPerSlot: settings.maxCoversPerSlot,
   });
 
   function save() {
@@ -77,15 +82,73 @@ export function SettingsForm({
           <Field label="Booking interval (min)"><Input type="number" value={form.bookingInterval} onChange={(e) => setForm({ ...form, bookingInterval: Number(e.target.value) })} /></Field>
           <Field label="Buffer between bookings (min)"><Input type="number" value={form.seatingBuffer} onChange={(e) => setForm({ ...form, seatingBuffer: Number(e.target.value) })} /></Field>
           <Field label="Max party size (online)"><Input type="number" value={form.maxPartySize} onChange={(e) => setForm({ ...form, maxPartySize: Number(e.target.value) })} /></Field>
+          <Field label="Max reservations / slot (0 = no cap)"><Input type="number" value={form.maxReservationsPerSlot} onChange={(e) => setForm({ ...form, maxReservationsPerSlot: Number(e.target.value) })} /></Field>
+          <Field label="Max guests / slot (0 = no cap)"><Input type="number" value={form.maxCoversPerSlot} onChange={(e) => setForm({ ...form, maxCoversPerSlot: Number(e.target.value) })} /></Field>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Default caps apply to every start time. For a specific rule (e.g. max 4 at 18:00) add a per-slot limit below.
+        </p>
         <div className="mt-6 flex justify-end">
           <Button onClick={save} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings</Button>
         </div>
       </Section>
 
+      <SlotLimitsEditor slotLimits={slotLimits} />
       <OpeningHoursEditor openingHours={openingHours} />
       <ClosuresEditor closures={closures} />
     </div>
+  );
+}
+
+function SlotLimitsEditor({ slotLimits }: { slotLimits: SlotLimit[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [day, setDay] = useState<string>("-1"); // -1 = every day
+  const [time, setTime] = useState("18:00");
+  const [maxRes, setMaxRes] = useState(4);
+
+  function add() {
+    startTransition(async () => {
+      const res = await addSlotLimit({ dayOfWeek: Number(day), time, maxReservations: maxRes });
+      if (res.ok) { toast.success("Limit added"); router.refresh(); } else toast.error(res.error);
+    });
+  }
+  function remove(id: string) {
+    startTransition(async () => { await deleteSlotLimit(id); router.refresh(); });
+  }
+
+  return (
+    <Section title="Per-slot limits" description="Cap reservations for a specific start time (overrides the default cap).">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="space-y-1.5">
+          <Label>Day</Label>
+          <Select value={day} onValueChange={setDay}>
+            <SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-1">Every day</SelectItem>
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                <SelectItem key={d} value={String(d)}>{DAY_NAMES[d]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Time</Label><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="sm:w-32" /></div>
+        <div className="space-y-1.5"><Label>Max reservations</Label><Input type="number" min={0} value={maxRes} onChange={(e) => setMaxRes(Number(e.target.value))} className="sm:w-36" /></div>
+        <Button onClick={add} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Add</Button>
+      </div>
+      <div className="mt-6 space-y-2">
+        {slotLimits.length === 0 && <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">No per-slot limits.</p>}
+        {slotLimits.map((l) => (
+          <div key={l.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div className="text-sm">
+              <span className="font-medium">{l.time}</span>
+              <span className="text-muted-foreground"> · {l.dayOfWeek === null ? "every day" : DAY_NAMES[l.dayOfWeek]} · max {l.maxReservations} reservations</span>
+            </div>
+            <Button size="icon-sm" variant="ghost" onClick={() => remove(l.id)}><Trash2 className="size-4" /></Button>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 
