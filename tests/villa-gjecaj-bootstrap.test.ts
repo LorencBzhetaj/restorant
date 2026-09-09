@@ -68,6 +68,18 @@ describe("villa-gjecaj bootstrap", () => {
     expect(limits[0].maxReservations).toBe(VILLA_GJECAJ_PEAK_MAX);
   });
 
+  it("3b. refuses (throws) when duplicate global 18:00 rows exist — never updates only one", async () => {
+    // Two conflicting global 18:00 rows, both wrong.
+    await prisma.slotLimit.create({ data: { time: "18:00", areaKind: null, dayOfWeek: null, maxReservations: 2 } });
+    await prisma.slotLimit.create({ data: { time: "18:00", areaKind: null, dayOfWeek: null, maxReservations: 8 } });
+
+    await expect(bootstrapVillaGjecaj(prisma)).rejects.toThrow(/duplicate global 18:00/i);
+
+    // both rows are untouched — neither silently updated to 4
+    const rows = await prisma.slotLimit.findMany({ where: globalPeakWhere(), orderBy: { maxReservations: "asc" } });
+    expect(rows.map((r) => r.maxReservations)).toEqual([2, 8]);
+  });
+
   it("4. preserves unrelated areas and slot limits", async () => {
     // an indoor area under a custom name — must be kept, not renamed or duplicated
     await prisma.area.create({ data: { name: "Sala", kind: "indoor" } });

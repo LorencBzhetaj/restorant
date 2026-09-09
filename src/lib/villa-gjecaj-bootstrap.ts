@@ -62,9 +62,24 @@ export async function bootstrapVillaGjecaj(prisma: PrismaClient): Promise<Bootst
   // --- Global 18:00 cap: dayOfWeek null = every day, areaKind null = whole restaurant. ---
   // The where-clause deliberately pins BOTH nulls so day-specific or
   // area-specific 18:00 rules are never matched, updated or duplicated.
-  const existingLimit = await prisma.slotLimit.findFirst({
+  //
+  // There is no DB unique constraint that could prevent duplicate global rows
+  // (Postgres treats NULLs as distinct, so a plain unique index would not help),
+  // so we detect duplicates explicitly and REFUSE to act rather than silently
+  // updating just one of them and leaving conflicting caps behind.
+  const existingLimits = await prisma.slotLimit.findMany({
     where: { time: VILLA_GJECAJ_PEAK_TIME, areaKind: null, dayOfWeek: null },
+    orderBy: { id: "asc" },
   });
+  if (existingLimits.length > 1) {
+    const ids = existingLimits.map((l) => `${l.id}(max=${l.maxReservations})`).join(", ");
+    throw new Error(
+      `Found ${existingLimits.length} duplicate global ${VILLA_GJECAJ_PEAK_TIME} SlotLimit rows: ${ids}. ` +
+        `Refusing to update only one. Remove the extras in the dashboard (Settings → slot limits) ` +
+        `so exactly one global ${VILLA_GJECAJ_PEAK_TIME} rule remains, then re-run the bootstrap.`,
+    );
+  }
+  const existingLimit = existingLimits[0] ?? null;
 
   const limitLabel = `SlotLimit ${VILLA_GJECAJ_PEAK_TIME} (global, every day)`;
   if (!existingLimit) {
