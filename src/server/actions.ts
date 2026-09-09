@@ -17,6 +17,7 @@ import {
   areaSchema,
   areaClosureSchema,
   combinationSchema,
+  floorLayoutSchema,
 } from "@/lib/validations";
 import { isAdmin } from "@/lib/require-admin";
 import { ReservationStatus, NotificationType } from "@/lib/constants";
@@ -409,6 +410,36 @@ export async function deleteCombination(id: string): Promise<ActionResult> {
   // tables (via ReservationTable), never a combination, so deleting one never
   // affects an existing booking. Deactivate instead if staff want to keep it.
   await prisma.tableCombination.delete({ where: { id } });
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+// ---- Floor plan layout -----------------------------------------------------
+/**
+ * Persist the drag-and-drop floor layout: only visual fields (x/y/w/h/shape/
+ * rotation) are updated, in a single transaction. This never touches seats,
+ * area, active status, reservations or availability — moving a shape on the map
+ * cannot change what is bookable.
+ */
+export async function saveFloorLayout(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  const parsed = floorLayoutSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid layout" };
+
+  const ids = parsed.data.tables.map((t) => t.id);
+  const existing = await prisma.restaurantTable.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (existing.length !== ids.length) return { ok: false, error: "One or more tables no longer exist." };
+
+  await prisma.$transaction(
+    parsed.data.tables.map((t) =>
+      prisma.restaurantTable.update({
+        where: { id: t.id },
+        data: { x: t.x, y: t.y, w: t.w, h: t.h, shape: t.shape, rotation: t.rotation },
+      }),
+    ),
+  );
+  revalidatePath("/dashboard/floor");
+  revalidatePath("/dashboard/floor/edit");
   revalidatePath("/dashboard/tables");
   return { ok: true };
 }

@@ -87,6 +87,27 @@ export const combinationSchema = z
     path: ["minSeats"],
   });
 
+// Floor-plan editor: a batch of table position/size/shape/rotation updates.
+// Grid is 12 x 8; a table must stay fully inside the canvas (never lost off-grid).
+const FLOOR_COLS = 12;
+const FLOOR_ROWS = 8;
+export const floorTableLayoutSchema = z
+  .object({
+    id: z.string().min(1),
+    x: z.coerce.number().int().min(0).max(FLOOR_COLS - 1),
+    y: z.coerce.number().int().min(0).max(FLOOR_ROWS - 1),
+    w: z.coerce.number().int().min(1).max(FLOOR_COLS),
+    h: z.coerce.number().int().min(1).max(FLOOR_ROWS),
+    shape: z.enum(["square", "round", "rect"]),
+    rotation: z.coerce.number().int().refine((v) => [0, 90, 180, 270].includes(v), "Rotation must be 0/90/180/270"),
+  })
+  .refine((t) => t.x + t.w <= FLOOR_COLS, { message: "Table extends past the right edge", path: ["x"] })
+  .refine((t) => t.y + t.h <= FLOOR_ROWS, { message: "Table extends past the bottom edge", path: ["y"] });
+
+export const floorLayoutSchema = z.object({
+  tables: z.array(floorTableLayoutSchema).min(1).max(200),
+});
+
 export const openingHourSchema = z.object({
   dayOfWeek: z.coerce.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),

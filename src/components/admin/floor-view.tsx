@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toDateKey, formatDateLong, pad2 } from "@/lib/format";
@@ -90,6 +91,7 @@ export function FloorView({
         <div className="flex items-center gap-4 text-sm">
           <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-emerald-500" /> {free} free</span>
           <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-rose-400" /> {occupied} seated</span>
+          <Button variant="outline" size="sm" asChild><Link href="/dashboard/floor/edit"><Pencil className="size-4" /> Edit layout</Link></Button>
         </div>
       </div>
 

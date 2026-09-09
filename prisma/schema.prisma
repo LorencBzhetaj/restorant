@@ -60,6 +60,7 @@ model RestaurantTable {
   y         Int      @default(0)
   w         Int      @default(2)
   h         Int      @default(2)
+  rotation  Int      @default(0) // degrees: 0 | 90 | 180 | 270 (visual only)
   isActive  Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
