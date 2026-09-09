@@ -22,8 +22,9 @@ model Area {
   priority         Int     @default(0) // lower = preferred for "no preference"
   sortOrder        Int     @default(0)
 
-  tables   RestaurantTable[]
-  closures AreaClosure[]
+  tables       RestaurantTable[]
+  closures     AreaClosure[]
+  combinations TableCombination[]
 
   @@index([kind])
 }
@@ -64,11 +65,62 @@ model RestaurantTable {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  area         Area?         @relation(fields: [areaId], references: [id])
-  reservations Reservation[]
+  area               Area?                    @relation(fields: [areaId], references: [id])
+  reservations       Reservation[]
+  reservationTables  ReservationTable[]
+  combinationMembers TableCombinationMember[]
 
   @@index([section])
   @@index([areaId])
+}
+
+// A predefined physical grouping of two or more real tables that can be pushed
+// together to seat a larger party. Combinations are curated by staff — the
+// engine never invents them. All member tables must share the same area.
+model TableCombination {
+  id        String   @id @default(cuid())
+  name      String
+  areaId    String
+  minSeats  Int?
+  maxSeats  Int
+  priority  Int      @default(0) // lower = preferred when capacities tie
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  area    Area                     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  members TableCombinationMember[]
+
+  @@index([areaId])
+  @@index([isActive])
+}
+
+model TableCombinationMember {
+  id            String @id @default(cuid())
+  combinationId String
+  tableId       String
+
+  combination TableCombination @relation(fields: [combinationId], references: [id], onDelete: Cascade)
+  table       RestaurantTable  @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([combinationId, tableId]) // a table cannot appear twice in one combination
+  @@index([tableId])
+}
+
+// Join between a reservation and the one-or-more tables it occupies. This is the
+// authoritative record of which tables a booking holds (a single-table booking
+// has exactly one row; a combined booking has several).
+model ReservationTable {
+  id            String @id @default(cuid())
+  reservationId String
+  tableId       String
+
+  reservation Reservation     @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  table       RestaurantTable @relation(fields: [tableId], references: [id])
+
+  @@unique([reservationId, tableId])
+  @@index([tableId])
+  @@index([reservationId])
 }
 
 model Customer {
@@ -102,9 +154,10 @@ model Reservation {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  table         RestaurantTable @relation(fields: [tableId], references: [id])
-  customer      Customer        @relation(fields: [customerId], references: [id])
+  table         RestaurantTable    @relation(fields: [tableId], references: [id])
+  customer      Customer           @relation(fields: [customerId], references: [id])
   notifications Notification[]
+  tables        ReservationTable[]
 
   @@index([tableId, startDateTime])
   @@index([startDateTime])
@@ -147,23 +200,23 @@ model Notification {
 }
 
 model RestaurantSetting {
-  id                  String   @id @default(cuid())
-  name                String
-  tagline             String?
-  phone               String?
-  whatsapp            String?
-  address             String?
-  email               String?
-  currency            String   @default("EUR")
-  turnDurationMinutes Int      @default(120) // how long a table is held per booking
-  bookingInterval     Int      @default(30) // slot granularity, minutes
-  seatingBuffer       Int      @default(15) // minutes between bookings on the same table
-  maxPartySize        Int      @default(12)
+  id                     String   @id @default(cuid())
+  name                   String
+  tagline                String?
+  phone                  String?
+  whatsapp               String?
+  address                String?
+  email                  String?
+  currency               String   @default("EUR")
+  turnDurationMinutes    Int      @default(120) // how long a table is held per booking
+  bookingInterval        Int      @default(30) // slot granularity, minutes
+  seatingBuffer          Int      @default(15) // minutes between bookings on the same table
+  maxPartySize           Int      @default(12)
   // Capacity caps per time slot (0 = no cap; capacity then limited only by tables)
-  maxReservationsPerSlot Int   @default(0)
-  maxCoversPerSlot       Int   @default(0)
-  timezone            String   @default("Europe/Tirane")
-  updatedAt           DateTime @updatedAt
+  maxReservationsPerSlot Int      @default(0)
+  maxCoversPerSlot       Int      @default(0)
+  timezone               String   @default("Europe/Tirane")
+  updatedAt              DateTime @updatedAt
 }
 
 // Per-time overrides for the slot caps, e.g. "max 4 reservations at 18:00".
