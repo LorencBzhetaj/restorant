@@ -1,25 +1,32 @@
 import { cn } from "@/lib/utils";
+import { LogoImage } from "@/components/site/logo-image";
 
 export function BrandMark({
   className,
   light = false,
   name = "Gjeçaj Alpine Restaurant Cuisine",
+  logoUrl = null,
 }: {
   className?: string;
   light?: boolean;
   name?: string;
+  logoUrl?: string | null;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span
-        className={cn(
-          "grid size-9 place-items-center rounded-md border font-heading text-base font-semibold",
-          light ? "border-white/20 bg-white/5 text-brand" : "border-brand/30 bg-brand/10 text-brand",
-        )}
-        aria-hidden
-      >
-        {name.trim().charAt(0).toUpperCase() || "G"}
-      </span>
+      {logoUrl ? (
+        <LogoImage src={logoUrl} name={name} light={light} />
+      ) : (
+        <span
+          className={cn(
+            "grid size-9 place-items-center rounded-md border font-heading text-base font-semibold",
+            light ? "border-white/20 bg-white/5 text-brand" : "border-brand/30 bg-brand/10 text-brand",
+          )}
+          aria-hidden
+        >
+          {name.trim().charAt(0).toUpperCase() || "G"}
+        </span>
+      )}
       <span className="flex flex-col leading-none">
         <span
           className={cn(

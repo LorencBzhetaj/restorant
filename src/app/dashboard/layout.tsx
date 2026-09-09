@@ -14,11 +14,11 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-muted/30">
       <aside className="fixed inset-y-0 left-0 hidden w-64 lg:block">
-        <AdminSidebar shopName={settings.name} />
+        <AdminSidebar shopName={settings.name} logoUrl={settings.logoUrl} />
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-64">
-        <AdminTopbar restaurantName={settings.name} tables={tableOptions} />
+        <AdminTopbar restaurantName={settings.name} logoUrl={settings.logoUrl} tables={tableOptions} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>

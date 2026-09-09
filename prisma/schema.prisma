@@ -208,6 +208,9 @@ model RestaurantSetting {
   whatsapp               String?
   address                String?
   email                  String?
+  logoUrl                String? // absolute public HTTPS URL to the logo (dashboard + emails)
+  websiteUrl             String?
+  brandColor             String? // optional hex, e.g. "#b85c38"
   currency               String   @default("EUR")
   turnDurationMinutes    Int      @default(120) // how long a table is held per booking
   bookingInterval        Int      @default(30) // slot granularity, minutes

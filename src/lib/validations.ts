@@ -127,6 +127,26 @@ export const settingsSchema = z.object({
   whatsapp: z.string().trim().max(40).optional().or(z.literal("")),
   address: z.string().trim().max(200).optional().or(z.literal("")),
   email: z.string().trim().max(120).optional().or(z.literal("")),
+  logoUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === "" || /^https:\/\/.+/i.test(v), "Logo must be a public https:// URL")
+    .optional()
+    .or(z.literal("")),
+  websiteUrl: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((v) => v === "" || /^https?:\/\/.+/i.test(v), "Website must be a valid URL")
+    .optional()
+    .or(z.literal("")),
+  brandColor: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || /^#[0-9a-fA-F]{6}$/.test(v), "Use a hex colour like #b85c38")
+    .optional()
+    .or(z.literal("")),
   currency: z.string().trim().min(1).max(8),
   turnDurationMinutes: z.coerce.number().int().min(30).max(360),
   bookingInterval: z.coerce.number().int().min(15).max(120),

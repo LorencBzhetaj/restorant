@@ -27,14 +27,22 @@ interface Ctx {
   area: string | null;
   weatherDependent: boolean;
   reminderText: string | null;
+  logoUrl: string | null;
 }
 
-function layout(brand: string, title: string, bodyHtml: string, footer?: string): string {
+function layout(brand: string, logoUrl: string | null, title: string, bodyHtml: string, footer?: string): string {
+  // Logo only when it's an absolute https URL (email-client compatible, no
+  // base64). The brand name is the alt text, so the header stays readable when
+  // images are blocked. Constrained height avoids oversized logos.
+  const header =
+    logoUrl && /^https:\/\//i.test(logoUrl)
+      ? `<img src="${logoUrl}" alt="${brand}" height="40" style="max-height:40px;width:auto;display:block;border:0;outline:none" />`
+      : `<span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.5px">${brand}</span>`;
   return `
   <div style="background:#f6f5f3;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
     <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #eee">
       <div style="background:${BRAND};padding:20px 24px">
-        <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.5px">${brand}</span>
+        ${header}
       </div>
       <div style="padding:24px">
         <h1 style="margin:0 0 12px;font-size:20px">${title}</h1>
@@ -79,7 +87,7 @@ function buildEmails(
   const details = detailsTable(ctx);
 
   const mk = (to: string | null, subject: string, inner: string, footer?: string): EmailMessage | null =>
-    to ? { to, subject, html: layout(ctx.restaurantName, subject, inner, footer), text: `${subject}\n\n${ctx.customerName} · ${ctx.partySize} guests · ${when} · ${ctx.tableName}` } : null;
+    to ? { to, subject, html: layout(ctx.restaurantName, ctx.logoUrl, subject, inner, footer), text: `${subject}\n\n${ctx.customerName} · ${ctx.partySize} guests · ${when} · ${ctx.tableName}` } : null;
 
   switch (type) {
     case "BookingConfirmation":
@@ -216,6 +224,7 @@ export async function buildReservationEmails(
     area: area?.name ?? null,
     weatherDependent: area?.kind === "outdoor" && (area?.weatherDependent ?? false),
     reminderText: settings?.reminderText ?? null,
+    logoUrl: settings?.logoUrl ?? null,
   };
   return buildEmails(type, ctx);
 }

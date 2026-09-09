@@ -27,9 +27,11 @@ const NAV = [
 
 export function AdminSidebar({
   shopName,
+  logoUrl = null,
   onNavigate,
 }: {
   shopName: string;
+  logoUrl?: string | null;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -38,7 +40,7 @@ export function AdminSidebar({
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
         <Link href="/dashboard" onClick={onNavigate}>
-          <BrandMark name={shopName} light />
+          <BrandMark name={shopName} logoUrl={logoUrl} light />
         </Link>
       </div>
 

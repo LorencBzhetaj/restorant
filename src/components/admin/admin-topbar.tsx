@@ -26,9 +26,11 @@ const TITLES: { match: (p: string) => boolean; title: string }[] = [
 
 export function AdminTopbar({
   restaurantName,
+  logoUrl = null,
   tables,
 }: {
   restaurantName: string;
+  logoUrl?: string | null;
   tables: TableOpt[];
 }) {
   const [open, setOpen] = useState(false);
@@ -46,7 +48,7 @@ export function AdminTopbar({
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <AdminSidebar shopName={restaurantName} onNavigate={() => setOpen(false)} />
+            <AdminSidebar shopName={restaurantName} logoUrl={logoUrl} onNavigate={() => setOpen(false)} />
           </SheetContent>
         </Sheet>
         <h1 className="font-heading text-xl font-semibold tracking-tight">{title}</h1>

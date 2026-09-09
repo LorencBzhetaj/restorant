@@ -20,6 +20,7 @@ import {
 interface Settings {
   name: string; tagline: string | null; phone: string | null; whatsapp: string | null;
   address: string | null; email: string | null; currency: string;
+  logoUrl: string | null; websiteUrl: string | null; brandColor: string | null;
   turnDurationMinutes: number; bookingInterval: number; seatingBuffer: number; maxPartySize: number;
   maxReservationsPerSlot: number; maxCoversPerSlot: number;
   reminder24hEnabled: boolean; reminder2hEnabled: boolean; reminderText: string | null;
@@ -41,6 +42,7 @@ export function SettingsForm({
   const [form, setForm] = useState({
     name: settings.name, tagline: settings.tagline ?? "", phone: settings.phone ?? "",
     whatsapp: settings.whatsapp ?? "", address: settings.address ?? "", email: settings.email ?? "",
+    logoUrl: settings.logoUrl ?? "", websiteUrl: settings.websiteUrl ?? "", brandColor: settings.brandColor ?? "",
     currency: settings.currency, turnDurationMinutes: settings.turnDurationMinutes,
     bookingInterval: settings.bookingInterval, seatingBuffer: settings.seatingBuffer, maxPartySize: settings.maxPartySize,
     maxReservationsPerSlot: settings.maxReservationsPerSlot, maxCoversPerSlot: settings.maxCoversPerSlot,
@@ -77,6 +79,32 @@ export function SettingsForm({
             </Select>
           </Field>
           <FieldFull label="Address"><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} /></FieldFull>
+        </div>
+      </Section>
+
+      <Section title="Branding" description="Logo and website. Shown in the dashboard and at the top of guest emails.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FieldFull label="Logo URL (public https://)">
+            <Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://booking.gjecaj.al/logo.png" />
+          </FieldFull>
+          <Field label="Website URL"><Input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://gjecaj.al" /></Field>
+          <Field label="Brand colour (hex)"><Input value={form.brandColor} onChange={(e) => setForm({ ...form, brandColor: e.target.value })} placeholder="#b85c38" /></Field>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <span className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted/40">
+            {form.logoUrl.trim() ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.logoUrl} alt="Logo preview" className="size-full object-contain" />
+            ) : (
+              <span className="font-heading text-lg font-semibold text-brand">{form.name.trim().charAt(0).toUpperCase() || "G"}</span>
+            )}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {form.logoUrl.trim() ? "Logo preview. If it fails to load, the initial is shown instead." : "No logo set — the name initial is used as a safe fallback everywhere."}
+          </p>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <Button onClick={save} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings</Button>
         </div>
       </Section>
 
