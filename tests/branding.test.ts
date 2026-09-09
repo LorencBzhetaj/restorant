@@ -1,6 +1,7 @@
 import { vi, describe, it, expect } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+vi.mock("@/lib/require-admin", () => ({ isAdmin: async () => true }));
 vi.mock("@/lib/email", () => ({
   isEmailConfigured: () => true,
   appUrl: () => "http://localhost:3000",

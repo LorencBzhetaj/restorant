@@ -171,6 +171,7 @@ export async function cancelReservationByToken(token: string): Promise<ActionRes
 }
 
 export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reservationId: string }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = walkInSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid details" };
   const input = parsed.data;
@@ -233,6 +234,7 @@ const STATUS_NOTIFICATION: Partial<Record<ReservationStatus, NotificationType>> 
 };
 
 export async function setReservationStatus(id: string, status: ReservationStatus): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const res = await prisma.reservation.findUnique({ where: { id } });
   if (!res) return { ok: false, error: "Reservation not found" };
   await prisma.reservation.update({ where: { id }, data: { status } });
@@ -247,6 +249,7 @@ export async function rescheduleReservation(
   newStartIso: string,
   newTableId?: string,
 ): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const res = await prisma.reservation.findUnique({ where: { id } });
   if (!res) return { ok: false, error: "Reservation not found" };
   const tableId = newTableId || res.tableId;
@@ -278,6 +281,7 @@ export async function rescheduleReservation(
 
 // ---- Tables ----------------------------------------------------------------
 export async function upsertTable(id: string | null, raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = tableSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   const p = parsed.data;
@@ -306,6 +310,7 @@ export async function upsertTable(id: string | null, raw: unknown): Promise<Acti
 
 // ---- Areas -----------------------------------------------------------------
 export async function addArea(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = areaSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   const count = await prisma.area.count();
@@ -316,6 +321,7 @@ export async function addArea(raw: unknown): Promise<ActionResult> {
 }
 
 export async function toggleAreaOpen(id: string, isOpen: boolean): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.area.update({ where: { id }, data: { isOpen } });
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/floor");
@@ -324,6 +330,7 @@ export async function toggleAreaOpen(id: string, isOpen: boolean): Promise<Actio
 }
 
 export async function deleteArea(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const tableCount = await prisma.restaurantTable.count({ where: { areaId: id } });
   if (tableCount > 0) return { ok: false, error: "Move or delete this area's tables first." };
   await prisma.area.delete({ where: { id } });
@@ -509,6 +516,7 @@ export async function deleteAreaClosure(id: string): Promise<ActionResult> {
 }
 
 export async function toggleTableActive(id: string, isActive: boolean): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.restaurantTable.update({ where: { id }, data: { isActive } });
   revalidatePath("/dashboard/tables");
   revalidatePath("/dashboard/floor");
@@ -517,6 +525,7 @@ export async function toggleTableActive(id: string, isActive: boolean): Promise<
 
 // ---- Opening hours ---------------------------------------------------------
 export async function addOpeningHour(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = openingHourSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   if (parsed.data.startTime >= parsed.data.endTime) return { ok: false, error: "End time must be after start time" };
@@ -526,6 +535,7 @@ export async function addOpeningHour(raw: unknown): Promise<ActionResult> {
 }
 
 export async function deleteOpeningHour(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.openingHour.delete({ where: { id } });
   revalidatePath("/dashboard/settings");
   return { ok: true };
@@ -533,6 +543,7 @@ export async function deleteOpeningHour(id: string): Promise<ActionResult> {
 
 // ---- Closures --------------------------------------------------------------
 export async function addClosure(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = closureSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   if (parsed.data.startDate > parsed.data.endDate) return { ok: false, error: "End date must be after start date" };
@@ -550,6 +561,7 @@ export async function addClosure(raw: unknown): Promise<ActionResult> {
 }
 
 export async function deleteClosure(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.closure.delete({ where: { id } });
   revalidatePath("/dashboard/settings");
   return { ok: true };
@@ -557,12 +569,14 @@ export async function deleteClosure(id: string): Promise<ActionResult> {
 
 // ---- Customer / Settings ---------------------------------------------------
 export async function updateCustomerNotes(id: string, notes: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.customer.update({ where: { id }, data: { notes: notes || null } });
   revalidatePath(`/dashboard/customers/${id}`);
   return { ok: true };
 }
 
 export async function updateSettings(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = settingsSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   const existing = await prisma.restaurantSetting.findFirst();
@@ -600,6 +614,7 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
 
 // ---- Per-slot limits -------------------------------------------------------
 export async function addSlotLimit(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   const parsed = slotLimitSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   await prisma.slotLimit.create({
@@ -616,6 +631,7 @@ export async function addSlotLimit(raw: unknown): Promise<ActionResult> {
 }
 
 export async function deleteSlotLimit(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await prisma.slotLimit.delete({ where: { id } });
   revalidatePath("/dashboard/settings");
   return { ok: true };
