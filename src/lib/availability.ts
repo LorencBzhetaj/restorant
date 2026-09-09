@@ -169,6 +169,105 @@ async function getAreaClosuresInRange(rangeStart: Date, rangeEnd: Date): Promise
   return rows;
 }
 
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+export interface Occupancy {
+  tableId: string;
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Every (tableId, start, end) a table is held for by an active reservation in
+ * the window. A combined-table booking contributes one row per member table, so
+ * a single booking correctly blocks ALL of its tables. This is the multi-table
+ * source of truth (via ReservationTable), replacing the old single-tableId scan.
+ */
+async function getOccupanciesInRange(
+  client: DbClient,
+  rangeStart: Date,
+  rangeEnd: Date,
+  ignoreReservationId?: string,
+): Promise<Occupancy[]> {
+  const rows = await client.reservationTable.findMany({
+    where: {
+      reservation: {
+        status: { notIn: ["Cancelled", "NoShow"] },
+        startDateTime: { lte: rangeEnd },
+        endDateTime: { gte: rangeStart },
+        ...(ignoreReservationId ? { id: { not: ignoreReservationId } } : {}),
+      },
+    },
+    select: { tableId: true, reservation: { select: { startDateTime: true, endDateTime: true } } },
+  });
+  return rows.map((r) => ({ tableId: r.tableId, start: r.reservation.startDateTime, end: r.reservation.endDateTime }));
+}
+
+/** Does any active reservation hold `tableId` across [start, end) (buffer already applied)? */
+function tableClashes(occupancies: Occupancy[], tableId: string, start: Date, end: Date, bufferMs: number): boolean {
+  return occupancies.some(
+    (o) =>
+      o.tableId === tableId &&
+      overlaps(start, end, new Date(new Date(o.start).getTime() - bufferMs), new Date(new Date(o.end).getTime() + bufferMs)),
+  );
+}
+
+export interface EligibleCombination {
+  id: string;
+  areaId: string;
+  areaKind: string | null;
+  maxSeats: number;
+  minSeats: number | null;
+  priority: number;
+  memberTableIds: string[];
+}
+
+/**
+ * Active combinations that could seat `partySize` in a bookable area, validated:
+ * at least two members, every member an active table, all members in the combo's
+ * own area. Sorted smallest-capacity-then-priority so the tightest fit wins.
+ */
+async function getEligibleCombinations(
+  client: DbClient,
+  partySize: number,
+  openAreaIds: Set<string>,
+): Promise<EligibleCombination[]> {
+  const areas = await client.area.findMany({ select: { id: true, kind: true } });
+  const kindOf = new Map(areas.map((a) => [a.id, a.kind]));
+  const combos = await client.tableCombination.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      areaId: true,
+      maxSeats: true,
+      minSeats: true,
+      priority: true,
+      members: { select: { table: { select: { id: true, isActive: true, areaId: true } } } },
+    },
+  });
+  const result: EligibleCombination[] = [];
+  for (const c of combos) {
+    if (!openAreaIds.has(c.areaId)) continue;
+    if (c.maxSeats < partySize) continue;
+    if (c.minSeats != null && c.minSeats > partySize) continue;
+    const members = c.members.map((m) => m.table);
+    if (members.length < 2) continue; // a combination needs at least two tables
+    if (!members.every((t) => t.isActive)) continue; // every member must be active
+    if (!members.every((t) => t.areaId === c.areaId)) continue; // members share the combo's area
+    result.push({
+      id: c.id,
+      areaId: c.areaId,
+      areaKind: kindOf.get(c.areaId) ?? null,
+      maxSeats: c.maxSeats,
+      minSeats: c.minSeats,
+      priority: c.priority,
+      memberTableIds: members.map((t) => t.id),
+    });
+  }
+  result.sort((a, b) => a.maxSeats - b.maxSeats || a.priority - b.priority);
+  return result;
+}
+
 function buildDate(dateStr: string, minutes: number): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d, 0, minutes, 0, 0);
@@ -191,29 +290,12 @@ export async function getTableAvailabilityAt(params: {
 
   const dayStart = buildDate(dateStr, 0);
   const dayEnd = buildDate(dateStr, 24 * 60);
-  const reservations = await prisma.reservation.findMany({
-    where: {
-      status: { notIn: ["Cancelled", "NoShow"] },
-      id: params.ignoreReservationId ? { not: params.ignoreReservationId } : undefined,
-      startDateTime: { lte: dayEnd },
-      endDateTime: { gte: dayStart },
-    },
-    select: { tableId: true, startDateTime: true, endDateTime: true },
-  });
+  const occupancies = await getOccupanciesInRange(prisma, dayStart, dayEnd, params.ignoreReservationId);
 
   return tables.map((t) => {
     if (!t.isActive) return { tableId: t.id, status: "inactive" as const };
     if (partySize && t.seats < partySize) return { tableId: t.id, status: "tooSmall" as const };
-    const clash = reservations.some(
-      (r) =>
-        r.tableId === t.id &&
-        overlaps(
-          start,
-          end,
-          new Date(new Date(r.startDateTime).getTime() - bufferMs),
-          new Date(new Date(r.endDateTime).getTime() + bufferMs),
-        ),
-    );
+    const clash = tableClashes(occupancies, t.id, start, end, bufferMs);
     return { tableId: t.id, status: clash ? ("occupied" as const) : ("free" as const) };
   });
 }
@@ -267,6 +349,12 @@ export async function getAvailableTimes(params: {
   const caps = await getSlotCaps();
   const areaKindForCap = requestedArea === "no_preference" ? null : requestedArea;
   const closures = await getAreaClosuresInRange(dayStart, dayEnd);
+  const occupancies = await getOccupanciesInRange(prisma, dayStart, dayEnd);
+
+  // Configured combinations that could seat this party, in a bookable area, with
+  // every member an active table. Combinations widen availability for parties no
+  // single free table can seat; the engine never invents groupings.
+  const combos = await getEligibleCombinations(prisma, partySize, openIds);
 
   const slots: TimeSlot[] = [];
   for (const period of periods) {
@@ -280,17 +368,12 @@ export async function getAvailableTimes(params: {
       for (const table of tables) {
         // Skip tables whose area has a temporary closure covering this slot.
         if (areaClosedAtSlot(closures, table.areaId, start, end)) continue;
-        const clash = reservations.some(
-          (r) =>
-            r.tableId === table.id &&
-            overlaps(
-              start,
-              end,
-              new Date(new Date(r.startDateTime).getTime() - bufferMs),
-              new Date(new Date(r.endDateTime).getTime() + bufferMs),
-            ),
-        );
-        if (!clash) freeTables++;
+        if (!tableClashes(occupancies, table.id, start, end, bufferMs)) freeTables++;
+      }
+      // Add combinations whose members are all free and whose area is open here.
+      for (const c of combos) {
+        if (areaClosedAtSlot(closures, c.areaId, start, end)) continue;
+        if (c.memberTableIds.every((id) => !tableClashes(occupancies, id, start, end, bufferMs))) freeTables++;
       }
       if (freeTables === 0) continue;
 
@@ -364,6 +447,113 @@ export async function slotHasCapacity(
   return true;
 }
 
+export interface AssignmentResult {
+  tableIds: string[]; // one table for a single booking; several for a combination
+  areaKind: string | null;
+}
+
+/**
+ * Choose the table(s) for a booking INSIDE the transaction, race-safe.
+ *
+ * Locking: acquires a per-table advisory lock for every candidate table in
+ * ascending id order (deterministic → deadlock-free), BEFORE reading occupancy,
+ * so two concurrent bookings can never be assigned the same member table. The
+ * caller still holds the per-slot lock first (for cap correctness); this only
+ * ever adds table locks after it, preserving a single global lock order.
+ *
+ * Selection: a concrete requested table is used only if it is active, fits and
+ * is free. For "any", a single smallest suitable free table is preferred; only
+ * when no single table fits/frees is the smallest available configured
+ * combination used (respecting priority on ties). Area closures and permanent
+ * area status apply to both.
+ */
+export async function assignTablesTx(
+  tx: Prisma.TransactionClient,
+  p: {
+    requestedTableId: string;
+    requestedArea: RequestedArea;
+    partySize: number;
+    start: Date;
+    end: Date;
+    bufferMs: number;
+    ignoreReservationId?: string;
+  },
+): Promise<AssignmentResult | null> {
+  const areas = await tx.area.findMany();
+  const openIds = new Set(
+    areas.filter((a) => a.isOpen && (p.requestedArea === "no_preference" || a.kind === p.requestedArea)).map((a) => a.id),
+  );
+  const kindOf = new Map(areas.map((a) => [a.id, a.kind]));
+  const prioOf = new Map(areas.map((a) => [a.id, a.priority]));
+
+  const singleTables = await tx.restaurantTable.findMany({
+    where: { isActive: true },
+    select: { id: true, seats: true, sortOrder: true, areaId: true },
+  });
+  const combos = await getEligibleCombinations(tx, p.partySize, openIds);
+
+  // Candidate set to lock (config only — a few extra locks are harmless).
+  const candidateIds = new Set<string>();
+  if (p.requestedTableId !== "any") {
+    candidateIds.add(p.requestedTableId);
+  } else {
+    for (const t of singleTables) {
+      if (t.seats < p.partySize) continue;
+      if (t.areaId ? openIds.has(t.areaId) : p.requestedArea === "no_preference") candidateIds.add(t.id);
+    }
+    for (const c of combos) for (const id of c.memberTableIds) candidateIds.add(id);
+  }
+  // Deterministic sorted order prevents deadlocks between concurrent bookings.
+  for (const id of [...candidateIds].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`tbl:${id}`})::bigint)`;
+  }
+
+  // Read occupancy + closures AFTER the locks are held.
+  const occ = await getOccupanciesInRange(
+    tx,
+    new Date(p.start.getTime() - p.bufferMs),
+    new Date(p.end.getTime() + p.bufferMs),
+    p.ignoreReservationId,
+  );
+  const closures = await tx.areaClosure.findMany({
+    where: { startDateTime: { lt: p.end }, endDateTime: { gt: p.start } },
+    select: { areaId: true, startDateTime: true, endDateTime: true },
+  });
+  const isFree = (tableId: string) => !tableClashes(occ, tableId, p.start, p.end, p.bufferMs);
+
+  // Concrete table (staff transfer / specific pick) → single table only.
+  if (p.requestedTableId !== "any") {
+    const t = singleTables.find((x) => x.id === p.requestedTableId);
+    if (!t || t.seats < p.partySize) return null;
+    if (areaClosedAtSlot(closures, t.areaId, p.start, p.end)) return null;
+    if (!isFree(t.id)) return null;
+    return { tableIds: [t.id], areaKind: t.areaId ? kindOf.get(t.areaId) ?? null : null };
+  }
+
+  // Prefer a single smallest suitable free table.
+  const eligibleSingles = singleTables
+    .filter((t) => t.seats >= p.partySize)
+    .filter((t) => (t.areaId ? openIds.has(t.areaId) : p.requestedArea === "no_preference"))
+    .filter((t) => !areaClosedAtSlot(closures, t.areaId, p.start, p.end))
+    .sort(
+      (a, b) =>
+        (prioOf.get(a.areaId ?? "") ?? 99) - (prioOf.get(b.areaId ?? "") ?? 99) ||
+        a.seats - b.seats ||
+        a.sortOrder - b.sortOrder,
+    );
+  const single = eligibleSingles.find((t) => isFree(t.id));
+  if (single) {
+    return { tableIds: [single.id], areaKind: single.areaId ? kindOf.get(single.areaId) ?? null : null };
+  }
+
+  // No single table fits/free → smallest available configured combination.
+  for (const c of combos) {
+    if (areaClosedAtSlot(closures, c.areaId, p.start, p.end)) continue;
+    if (c.memberTableIds.every(isFree)) return { tableIds: c.memberTableIds, areaKind: c.areaKind };
+  }
+  return null;
+}
+
 /** Smallest suitable free table for a slot (used for "Any table"). */
 export async function pickTableForSlot(params: {
   dateStr: string;
@@ -419,13 +609,15 @@ export async function isTableBookable(params: {
     if (areaClosedAtSlot(closures, table.areaId, start, end)) return false;
   }
 
-  const clash = await prisma.reservation.findFirst({
+  const clash = await prisma.reservationTable.findFirst({
     where: {
       tableId,
-      status: { notIn: ["Cancelled", "NoShow"] },
-      id: params.ignoreReservationId ? { not: params.ignoreReservationId } : undefined,
-      startDateTime: { lt: new Date(end.getTime() + bufferMs) },
-      endDateTime: { gt: new Date(start.getTime() - bufferMs) },
+      reservation: {
+        status: { notIn: ["Cancelled", "NoShow"] },
+        id: params.ignoreReservationId ? { not: params.ignoreReservationId } : undefined,
+        startDateTime: { lt: new Date(end.getTime() + bufferMs) },
+        endDateTime: { gt: new Date(start.getTime() - bufferMs) },
+      },
     },
     select: { id: true },
   });

@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Hard guard: refuse to run against anything but the local test DB.
+    setupFiles: ["tests/setup/guard-db.ts"],
     fileParallelism: false,
     testTimeout: 40000,
     hookTimeout: 60000,

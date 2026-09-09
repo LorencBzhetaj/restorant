@@ -68,6 +68,25 @@ export const areaClosureSchema = z
     path: ["endTime"],
   });
 
+export const combinationSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(60),
+    areaId: z.string().min(1, "Select an area"),
+    maxSeats: z.coerce.number().int().min(2, "Max seats must be at least 2").max(60),
+    minSeats: z.coerce.number().int().min(0).max(60).optional(),
+    priority: z.coerce.number().int().min(0).max(99).default(0),
+    isActive: z.boolean().default(true),
+    tableIds: z.array(z.string().min(1)).min(2, "A combination needs at least two tables"),
+  })
+  .refine((v) => new Set(v.tableIds).size === v.tableIds.length, {
+    message: "A table cannot appear twice in the same combination",
+    path: ["tableIds"],
+  })
+  .refine((v) => !v.minSeats || v.minSeats <= v.maxSeats, {
+    message: "Min seats cannot exceed max seats",
+    path: ["minSeats"],
+  });
+
 export const openingHourSchema = z.object({
   dayOfWeek: z.coerce.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),

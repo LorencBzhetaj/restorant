@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isTableBookable, getSettings, slotHasCapacity, areaClosedAtSlot } from "@/lib/availability";
+import { isTableBookable, getSettings, slotHasCapacity, assignTablesTx } from "@/lib/availability";
 import { sendNotification } from "@/lib/notifications";
 import { toDateKey, pad2 } from "@/lib/format";
 import {
@@ -16,6 +16,7 @@ import {
   slotLimitSchema,
   areaSchema,
   areaClosureSchema,
+  combinationSchema,
 } from "@/lib/validations";
 import { isAdmin } from "@/lib/require-admin";
 import { ReservationStatus, NotificationType } from "@/lib/constants";
@@ -58,66 +59,20 @@ function timeOf(d: Date) {
 }
 
 /**
- * Assign a free table INSIDE the booking transaction (race-safe under the
- * per-slot advisory lock). For "any", picks the smallest suitable free table;
- * for a specific table, returns it only if still free. Returns null if none.
+ * Persist a reservation's assigned tables: the primary table stays on
+ * Reservation.tableId for backward-compatible reads, and every assigned table
+ * (one, or several for a combination) is written to ReservationTable — the
+ * authoritative multi-table record.
  */
-async function assignTableTx(
+async function writeReservationTables(
   tx: Prisma.TransactionClient,
-  p: {
-    requestedTableId: string;
-    requestedArea: "indoor" | "outdoor" | "no_preference";
-    partySize: number;
-    start: Date;
-    end: Date;
-    bufferMs: number;
-  },
-): Promise<{ id: string; areaKind: string | null } | null> {
-  const busy = await tx.reservation.findMany({
-    where: {
-      status: { notIn: ["Cancelled", "NoShow"] },
-      startDateTime: { lt: new Date(p.end.getTime() + p.bufferMs) },
-      endDateTime: { gt: new Date(p.start.getTime() - p.bufferMs) },
-    },
-    select: { tableId: true },
+  reservationId: string,
+  tableIds: string[],
+) {
+  await tx.reservationTable.createMany({
+    data: tableIds.map((tableId) => ({ reservationId, tableId })),
+    skipDuplicates: true,
   });
-  const busyIds = new Set(busy.map((b) => b.tableId));
-
-  // Temporary area closures covering this window.
-  const closures = await tx.areaClosure.findMany({
-    where: { startDateTime: { lt: p.end }, endDateTime: { gt: p.start } },
-    select: { areaId: true, startDateTime: true, endDateTime: true },
-  });
-
-  if (p.requestedTableId !== "any") {
-    const t = await tx.restaurantTable.findUnique({ where: { id: p.requestedTableId }, include: { area: true } });
-    if (!t || !t.isActive || t.seats < p.partySize || busyIds.has(t.id)) return null;
-    if (areaClosedAtSlot(closures, t.areaId, p.start, p.end)) return null;
-    return { id: t.id, areaKind: t.area?.kind ?? null };
-  }
-
-  const areas = await tx.area.findMany();
-  const openIds = new Set(
-    areas.filter((a) => a.isOpen && (p.requestedArea === "no_preference" || a.kind === p.requestedArea)).map((a) => a.id),
-  );
-  const kindOf = new Map(areas.map((a) => [a.id, a.kind]));
-  const prioOf = new Map(areas.map((a) => [a.id, a.priority]));
-
-  const tables = await tx.restaurantTable.findMany({
-    where: { isActive: true, seats: { gte: p.partySize } },
-    select: { id: true, seats: true, sortOrder: true, areaId: true },
-  });
-  const eligible = tables
-    .filter((t) => (t.areaId ? openIds.has(t.areaId) : p.requestedArea === "no_preference"))
-    .filter((t) => !areaClosedAtSlot(closures, t.areaId, p.start, p.end))
-    .sort(
-      (a, b) =>
-        (prioOf.get(a.areaId ?? "") ?? 99) - (prioOf.get(b.areaId ?? "") ?? 99) ||
-        a.seats - b.seats ||
-        a.sortOrder - b.sortOrder,
-    );
-  const chosen = eligible.find((t) => !busyIds.has(t.id));
-  return chosen ? { id: chosen.id, areaKind: chosen.areaId ? kindOf.get(chosen.areaId) ?? null : null } : null;
 }
 
 export async function createReservation(
@@ -154,7 +109,7 @@ export async function createReservation(
         // assignment are race-safe (each concurrent booking gets a distinct table).
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${dateStr}T${time}`})::bigint)`;
 
-        const assigned = await assignTableTx(tx, {
+        const assigned = await assignTablesTx(tx, {
           requestedTableId: input.tableId,
           requestedArea: input.requestedArea,
           partySize: input.partySize,
@@ -168,9 +123,9 @@ export async function createReservation(
           throw new Error("SLOT_FULL");
         }
 
-        return tx.reservation.create({
+        const created = await tx.reservation.create({
           data: {
-            tableId: assigned.id,
+            tableId: assigned.tableIds[0],
             customerId: customer.id,
             startDateTime: start,
             endDateTime: end,
@@ -181,6 +136,8 @@ export async function createReservation(
             requestedArea: input.requestedArea,
           },
         });
+        await writeReservationTables(tx, created.id, assigned.tableIds);
+        return created;
       },
       { timeout: 20000, maxWait: 12000 },
     );
@@ -232,7 +189,7 @@ export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reserva
     const reservation = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${dateStr}T${time}`})::bigint)`;
-        const assigned = await assignTableTx(tx, {
+        const assigned = await assignTablesTx(tx, {
           requestedTableId: input.tableId,
           requestedArea: input.requestedArea,
           partySize: input.partySize,
@@ -241,9 +198,9 @@ export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reserva
           bufferMs,
         });
         if (!assigned) throw new Error("SLOT_TAKEN");
-        return tx.reservation.create({
+        const created = await tx.reservation.create({
           data: {
-            tableId: assigned.id,
+            tableId: assigned.tableIds[0],
             customerId: customer.id,
             startDateTime: start,
             endDateTime: end,
@@ -254,6 +211,8 @@ export async function createWalkIn(raw: unknown): Promise<ActionResult<{ reserva
             requestedArea: input.requestedArea,
           },
         });
+        await writeReservationTables(tx, created.id, assigned.tableIds);
+        return created;
       },
       { timeout: 20000, maxWait: 12000 },
     );
@@ -303,9 +262,13 @@ export async function rescheduleReservation(
   if (!bookable) return { ok: false, error: "That table/time is not available." };
 
   const end = new Date(start.getTime() + settings.turnDurationMinutes * 60000);
-  await prisma.reservation.update({
-    where: { id },
-    data: { startDateTime: start, endDateTime: end, tableId },
+  // Release the reservation's previous table(s) and reserve the new one in a
+  // single transaction, so the old tables free up and the new one is held
+  // atomically (no window where the booking holds both or neither).
+  await prisma.$transaction(async (tx) => {
+    await tx.reservation.update({ where: { id }, data: { startDateTime: start, endDateTime: end, tableId } });
+    await tx.reservationTable.deleteMany({ where: { reservationId: id } });
+    await tx.reservationTable.create({ data: { reservationId: id, tableId } });
   });
   await sendNotification(id, "Reschedule");
   revalidateAdmin();
@@ -363,6 +326,89 @@ export async function deleteArea(id: string): Promise<ActionResult> {
   const tableCount = await prisma.restaurantTable.count({ where: { areaId: id } });
   if (tableCount > 0) return { ok: false, error: "Move or delete this area's tables first." };
   await prisma.area.delete({ where: { id } });
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+// ---- Table combinations ----------------------------------------------------
+/**
+ * Validate a combination's member tables: they must all exist, be active, and
+ * belong to the combination's own area (no Indoor/Outdoor crossing). The Zod
+ * schema already enforces >= 2 distinct tables. Returns an error message or null.
+ */
+async function validateCombinationMembers(areaId: string, tableIds: string[]): Promise<string | null> {
+  const tables = await prisma.restaurantTable.findMany({
+    where: { id: { in: tableIds } },
+    select: { id: true, isActive: true, areaId: true },
+  });
+  if (tables.length !== tableIds.length) return "One or more selected tables no longer exist.";
+  if (tables.some((t) => !t.isActive)) return "All member tables must be active.";
+  if (tables.some((t) => t.areaId !== areaId)) return "All member tables must belong to the selected area.";
+  return null;
+}
+
+export async function addCombination(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  const parsed = combinationSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const p = parsed.data;
+  const memberError = await validateCombinationMembers(p.areaId, p.tableIds);
+  if (memberError) return { ok: false, error: memberError };
+  await prisma.tableCombination.create({
+    data: {
+      name: p.name,
+      areaId: p.areaId,
+      maxSeats: p.maxSeats,
+      minSeats: p.minSeats && p.minSeats > 0 ? p.minSeats : null,
+      priority: p.priority,
+      isActive: p.isActive,
+      members: { create: p.tableIds.map((tableId) => ({ tableId })) },
+    },
+  });
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+export async function updateCombination(id: string, raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  const parsed = combinationSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const p = parsed.data;
+  const memberError = await validateCombinationMembers(p.areaId, p.tableIds);
+  if (memberError) return { ok: false, error: memberError };
+  // Replace the member set atomically.
+  await prisma.$transaction(async (tx) => {
+    await tx.tableCombination.update({
+      where: { id },
+      data: {
+        name: p.name,
+        areaId: p.areaId,
+        maxSeats: p.maxSeats,
+        minSeats: p.minSeats && p.minSeats > 0 ? p.minSeats : null,
+        priority: p.priority,
+        isActive: p.isActive,
+      },
+    });
+    await tx.tableCombinationMember.deleteMany({ where: { combinationId: id } });
+    await tx.tableCombinationMember.createMany({ data: p.tableIds.map((tableId) => ({ combinationId: id, tableId })) });
+  });
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+export async function toggleCombination(id: string, isActive: boolean): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  await prisma.tableCombination.update({ where: { id }, data: { isActive } });
+  revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+export async function deleteCombination(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  // Safe: a combination is only a grouping DEFINITION. Reservations reference
+  // tables (via ReservationTable), never a combination, so deleting one never
+  // affects an existing booking. Deactivate instead if staff want to keep it.
+  await prisma.tableCombination.delete({ where: { id } });
   revalidatePath("/dashboard/tables");
   return { ok: true };
 }
