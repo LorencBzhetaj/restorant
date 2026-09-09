@@ -1,0 +1,32 @@
+{
+  "_instructions": "Fill in the real Villa Gjecaj tables and combinations, then run: npm run import:tables -- <path-to-this-file>  (add --confirm for a remote database). The importer is idempotent: it creates missing tables, updates matching ones (matched by name within an area), never deletes or duplicates, and reports any conflicts. Areas (Indoor/Outdoor) must already exist — run the bootstrap first. Nothing here is invented; leave the arrays empty until you have the real data.",
+  "_format": {
+    "table": {
+      "name": "string — the table's name/number, unique within its area (e.g. \"1\", \"T1\", \"Terrace 3\")",
+      "area": "\"indoor\" | \"outdoor\"",
+      "maxSeats": "integer — the table's seat capacity (stored as `seats`)",
+      "minSeats": "integer, optional — documentation only; the app has no per-table minimum",
+      "shape": "\"square\" | \"round\" | \"rect\" (optional, default square)",
+      "w": "integer 1..12, grid width (optional, default 2)",
+      "h": "integer 1..8, grid height (optional, default 2)",
+      "x": "integer 0..11, grid column (optional, default 0)",
+      "y": "integer 0..7, grid row (optional, default 0)",
+      "active": "boolean (optional, default true)"
+    },
+    "combination": {
+      "name": "string — unique within its area",
+      "area": "\"indoor\" | \"outdoor\" (all member tables must be in this area)",
+      "maxSeats": "integer — combined capacity",
+      "minSeats": "integer, optional",
+      "priority": "integer, optional (lower = preferred when capacities tie)",
+      "active": "boolean, optional (default true)",
+      "tables": "string[] — member table names, at least two, all in `area`"
+    }
+  },
+  "expectedCounts": {
+    "indoor": 9,
+    "outdoor": null
+  },
+  "tables": [],
+  "combinations": []
+}
