@@ -43,21 +43,25 @@ export function StepDateTime({
   const [party, setParty] = useState(2);
   const [area, setArea] = useState<Area>("no_preference");
   const [date, setDate] = useState(days[0].key);
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Availability is tagged with the query that produced it, so `loading` and the
+  // shown slots are derived during render — no synchronous setState in an effect.
+  const queryKey = `${date}|${party}|${area}`;
+  const [result, setResult] = useState<{ key: string; slots: Slot[] } | null>(null);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const key = `${date}|${party}|${area}`;
     fetch(`/api/availability?date=${date}&party=${party}&area=${area}`)
       .then((r) => r.json())
-      .then((d) => active && setSlots(d.slots ?? []))
-      .catch(() => active && setSlots([]))
-      .finally(() => active && setLoading(false));
+      .then((d) => active && setResult({ key, slots: d.slots ?? [] }))
+      .catch(() => active && setResult({ key, slots: [] }));
     return () => {
       active = false;
     };
   }, [date, party, area]);
+
+  const loading = !result || result.key !== queryKey;
+  const slots = loading ? [] : result.slots;
 
   const groups = [
     { key: "lunch", label: "Lunch", icon: Sun, items: slots.filter((s) => Number(s.time.split(":")[0]) < 16) },

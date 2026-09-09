@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Loader2, CalendarX2 } from "lucide-react";
 import { toast } from "sonner";
@@ -40,70 +40,7 @@ interface Slot {
 }
 
 export function NewReservationDialog({ tables }: { tables: TableOpt[] }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-
-  const [party, setParty] = useState(2);
-  const [date, setDate] = useState(toDateKey(new Date()));
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [slot, setSlot] = useState<Slot | null>(null);
-  const [freeTableIds, setFreeTableIds] = useState<Set<string>>(new Set());
-  const [tableId, setTableId] = useState<string>(ANY_TABLE);
-
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-
-  useEffect(() => {
-    if (!open) {
-      setParty(2); setDate(toDateKey(new Date())); setSlots([]); setSlot(null);
-      setFreeTableIds(new Set()); setTableId(ANY_TABLE);
-      setFirstName(""); setLastName(""); setPhone("");
-    }
-  }, [open]);
-
-  useEffect(() => {
-    let active = true;
-    setLoadingSlots(true);
-    setSlot(null);
-    fetch(`/api/availability?date=${date}&party=${party}`)
-      .then((r) => r.json())
-      .then((d) => active && setSlots(d.slots ?? []))
-      .catch(() => active && setSlots([]))
-      .finally(() => active && setLoadingSlots(false));
-    return () => { active = false; };
-  }, [date, party]);
-
-  useEffect(() => {
-    if (!slot) return;
-    let active = true;
-    setTableId(ANY_TABLE);
-    fetch(`/api/availability?date=${date}&time=${slot.time}&party=${party}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!active) return;
-        const free = new Set<string>((d.tables ?? []).filter((t: { status: string }) => t.status === "free").map((t: { tableId: string }) => t.tableId));
-        setFreeTableIds(free);
-      });
-    return () => { active = false; };
-  }, [slot, date, party]);
-
-  function submit() {
-    if (!slot) return toast.error("Select a time");
-    if (!firstName.trim() || !phone.trim()) return toast.error("Guest name and phone are required");
-    startTransition(async () => {
-      const res = await createWalkIn({ tableId, start: slot.start, partySize: party, firstName, lastName, phone });
-      if (res.ok) {
-        toast.success("Reservation created");
-        setOpen(false);
-        router.refresh();
-      } else toast.error(res.error);
-    });
-  }
-
-  const freeTables = tables.filter((t) => freeTableIds.has(t.id) && t.seats >= party);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -115,7 +52,81 @@ export function NewReservationDialog({ tables }: { tables: TableOpt[] }) {
           <DialogTitle>New reservation</DialogTitle>
           <DialogDescription>Walk-in or phone booking — uses live table availability.</DialogDescription>
         </DialogHeader>
+        {/* The form lives in a child that Radix unmounts on close, so every time
+            the dialog reopens it remounts with fresh state — no reset effect. */}
+        {open && <NewReservationForm tables={tables} onClose={() => setOpen(false)} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
+function NewReservationForm({ tables, onClose }: { tables: TableOpt[]; onClose: () => void }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const [party, setParty] = useState(2);
+  const [date, setDate] = useState(toDateKey(new Date()));
+  const [selectedStart, setSelectedStart] = useState<string | null>(null);
+  const [tableId, setTableId] = useState<string>(ANY_TABLE);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+
+  // Availability tagged with the query that produced it → loading and slots are
+  // derived during render instead of set synchronously inside the effect.
+  const slotsKey = `${date}|${party}`;
+  const [slotsData, setSlotsData] = useState<{ key: string; slots: Slot[] } | null>(null);
+  const [freeData, setFreeData] = useState<{ key: string; ids: Set<string> } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const key = `${date}|${party}`;
+    fetch(`/api/availability?date=${date}&party=${party}`)
+      .then((r) => r.json())
+      .then((d) => active && setSlotsData({ key, slots: d.slots ?? [] }))
+      .catch(() => active && setSlotsData({ key, slots: [] }));
+    return () => { active = false; };
+  }, [date, party]);
+
+  const loadingSlots = !slotsData || slotsData.key !== slotsKey;
+  const slots = useMemo(() => (loadingSlots || !slotsData ? [] : slotsData.slots), [loadingSlots, slotsData]);
+  const slot = useMemo(() => slots.find((s) => s.start === selectedStart) ?? null, [slots, selectedStart]);
+
+  useEffect(() => {
+    if (!slot) return;
+    let active = true;
+    const key = `${date}|${party}|${slot.time}`;
+    fetch(`/api/availability?date=${date}&time=${slot.time}&party=${party}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return;
+        const free = new Set<string>((d.tables ?? []).filter((t: { status: string }) => t.status === "free").map((t: { tableId: string }) => t.tableId));
+        setFreeData({ key, ids: free });
+      });
+    return () => { active = false; };
+  }, [slot, date, party]);
+
+  const freeKey = slot ? `${date}|${party}|${slot.time}` : "";
+  const freeTableIds = freeData && freeData.key === freeKey ? freeData.ids : EMPTY_IDS;
+
+  function submit() {
+    if (!slot) return toast.error("Select a time");
+    if (!firstName.trim() || !phone.trim()) return toast.error("Guest name and phone are required");
+    startTransition(async () => {
+      const res = await createWalkIn({ tableId, start: slot!.start, partySize: party, firstName, lastName, phone });
+      if (res.ok) {
+        toast.success("Reservation created");
+        onClose();
+        router.refresh();
+      } else toast.error(res.error);
+    });
+  }
+
+  const freeTables = tables.filter((t) => freeTableIds.has(t.id) && t.seats >= party);
+
+  return (
+    <>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -140,7 +151,7 @@ export function NewReservationDialog({ tables }: { tables: TableOpt[] }) {
                   <button
                     key={s.start}
                     type="button"
-                    onClick={() => setSlot(s)}
+                    onClick={() => { setSelectedStart(s.start); setTableId(ANY_TABLE); }}
                     className={cn("rounded-md border py-1.5 text-sm font-medium transition-colors", slot?.start === s.start ? "border-brand bg-brand/15" : "border-border hover:border-brand/60")}
                   >
                     {s.time}
@@ -173,10 +184,11 @@ export function NewReservationDialog({ tables }: { tables: TableOpt[] }) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={pending}>{pending && <Loader2 className="size-4 animate-spin" />} Create reservation</Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
+
+const EMPTY_IDS: Set<string> = new Set();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -83,60 +83,89 @@ export function ReservationDetail({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        {/* Keyed by reservation id + mounted only while open, so switching to a
+            different reservation (or reopening) starts from fresh state without a
+            reset effect. */}
+        {reservation && open && (
+          <ReservationBody
+            key={reservation.id}
+            reservation={reservation}
+            tables={tables}
+            onClose={() => onOpenChange(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const EMPTY_IDS: Set<string> = new Set();
+
+function ReservationBody({
+  reservation,
+  tables,
+  onClose,
+}: {
+  reservation: AdminReservation;
+  tables: { id: string; name: string; seats: number; section: string }[];
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [mode, setMode] = useState<"view" | "reschedule">("view");
 
-  const [rDate, setRDate] = useState("");
-  const [rSlots, setRSlots] = useState<Slot[]>([]);
-  const [rSlot, setRSlot] = useState<Slot | null>(null);
+  const [rDate, setRDate] = useState(() => toDateKey(new Date(reservation.start)));
+  const [selectedStart, setSelectedStart] = useState<string | null>(null);
   const [rTable, setRTable] = useState<string>(ANY_TABLE);
-  const [rLoading, setRLoading] = useState(false);
-  const [freeIds, setFreeIds] = useState<Set<string>>(new Set());
+
+  // Availability tagged with the query that produced it → loading and slots are
+  // derived during render instead of set synchronously inside the effect.
+  const [slotsData, setSlotsData] = useState<{ key: string; slots: Slot[] } | null>(null);
+  const [freeData, setFreeData] = useState<{ key: string; ids: Set<string> } | null>(null);
+
+  const start = new Date(reservation.start);
 
   useEffect(() => {
-    if (open && reservation) {
-      setMode("view");
-      setRDate(toDateKey(new Date(reservation.start)));
-      setRSlot(null);
-      setRTable(ANY_TABLE);
-    }
-  }, [open, reservation]);
-
-  useEffect(() => {
-    if (mode !== "reschedule" || !reservation || !rDate) return;
+    if (mode !== "reschedule" || !rDate) return;
     let active = true;
-    setRLoading(true);
-    setRSlot(null);
+    const key = rDate;
     fetch(`/api/availability?date=${rDate}&party=${reservation.partySize}&ignore=${reservation.id}`)
       .then((r) => r.json())
-      .then((d) => active && setRSlots(d.slots ?? []))
-      .finally(() => active && setRLoading(false));
+      .then((d) => active && setSlotsData({ key, slots: d.slots ?? [] }))
+      .catch(() => active && setSlotsData({ key, slots: [] }));
     return () => { active = false; };
-  }, [mode, rDate, reservation]);
+  }, [mode, rDate, reservation.partySize, reservation.id]);
+
+  const rLoading = mode === "reschedule" && !!rDate && (!slotsData || slotsData.key !== rDate);
+  const rSlots = useMemo(() => (slotsData && slotsData.key === rDate ? slotsData.slots : []), [slotsData, rDate]);
+  const rSlot = useMemo(() => rSlots.find((s) => s.start === selectedStart) ?? null, [rSlots, selectedStart]);
 
   useEffect(() => {
-    if (!rSlot || !reservation) return;
+    if (!rSlot) return;
     let active = true;
-    setRTable(ANY_TABLE);
+    const key = `${rDate}|${rSlot.time}`;
     fetch(`/api/availability?date=${rDate}&time=${rSlot.time}&party=${reservation.partySize}&ignore=${reservation.id}`)
       .then((r) => r.json())
       .then((d) => {
         if (!active) return;
-        setFreeIds(new Set<string>((d.tables ?? []).filter((t: { status: string }) => t.status === "free").map((t: { tableId: string }) => t.tableId)));
+        setFreeData({ key, ids: new Set<string>((d.tables ?? []).filter((t: { status: string }) => t.status === "free").map((t: { tableId: string }) => t.tableId)) });
       });
     return () => { active = false; };
-  }, [rSlot, rDate, reservation]);
+  }, [rSlot, rDate, reservation.partySize, reservation.id]);
 
-  if (!reservation) return null;
-  const start = new Date(reservation.start);
+  const freeKey = rSlot ? `${rDate}|${rSlot.time}` : "";
+  const freeIds = freeData && freeData.key === freeKey ? freeData.ids : EMPTY_IDS;
+  const freeTables = tables.filter((t) => freeIds.has(t.id) && t.seats >= reservation.partySize);
 
   function changeStatus(status: ReservationStatus) {
     startTransition(async () => {
-      const res = await setReservationStatus(reservation!.id, status);
+      const res = await setReservationStatus(reservation.id, status);
       if (res.ok) {
         toast.success(`Marked ${status === "NoShow" ? "no-show" : status.toLowerCase()}`);
-        onOpenChange(false);
+        onClose();
         router.refresh();
       } else toast.error(res.error);
     });
@@ -145,20 +174,17 @@ export function ReservationDetail({
   function doReschedule() {
     if (!rSlot) return toast.error("Select a new time");
     startTransition(async () => {
-      const res = await rescheduleReservation(reservation!.id, rSlot.start, rTable === ANY_TABLE ? undefined : rTable);
+      const res = await rescheduleReservation(reservation.id, rSlot!.start, rTable === ANY_TABLE ? undefined : rTable);
       if (res.ok) {
         toast.success("Reservation rescheduled");
-        onOpenChange(false);
+        onClose();
         router.refresh();
       } else toast.error(res.error);
     });
   }
 
-  const freeTables = tables.filter((t) => freeIds.has(t.id) && t.seats >= reservation.partySize);
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">Reservation <StatusBadge status={reservation.status} /></DialogTitle>
           <DialogDescription>{reservation.source} booking</DialogDescription>
@@ -254,7 +280,7 @@ export function ReservationDetail({
               ) : (
                 <div className="grid max-h-32 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5">
                   {rSlots.map((s) => (
-                    <button key={s.start} type="button" onClick={() => setRSlot(s)} className={cn("rounded-md border py-1.5 text-sm font-medium transition-colors", rSlot?.start === s.start ? "border-brand bg-brand/15" : "border-border hover:border-brand/60")}>{s.time}</button>
+                    <button key={s.start} type="button" onClick={() => { setSelectedStart(s.start); setRTable(ANY_TABLE); }} className={cn("rounded-md border py-1.5 text-sm font-medium transition-colors", rSlot?.start === s.start ? "border-brand bg-brand/15" : "border-border hover:border-brand/60")}>{s.time}</button>
                   ))}
                 </div>
               )}
@@ -277,8 +303,7 @@ export function ReservationDetail({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
 
