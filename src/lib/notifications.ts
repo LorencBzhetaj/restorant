@@ -26,6 +26,7 @@ interface Ctx {
   notes: string | null;
   area: string | null;
   weatherDependent: boolean;
+  reminderText: string | null;
 }
 
 function layout(brand: string, title: string, bodyHtml: string, footer?: string): string {
@@ -149,13 +150,40 @@ function buildEmails(
           `<p style="font-size:14px;color:#44403c">This guest did not arrive for their reservation.</p>${details}`,
         ),
       };
+    case "Reminder24h":
+    case "Reminder2h": {
+      const lead = type === "Reminder24h" ? "tomorrow" : "in a couple of hours";
+      const extra = ctx.reminderText
+        ? `<p style="font-size:14px;color:#44403c">${ctx.reminderText}</p>`
+        : "";
+      return {
+        customer: mk(
+          ctx.customerEmail,
+          `Reminder — your table at ${ctx.restaurantName} is ${lead}`,
+          `<p style="font-size:14px;color:#44403c">Hi ${first}, a friendly reminder about your reservation ${lead}:</p>
+           ${details}
+           ${extra}
+           <p style="font-size:14px;color:#44403c;margin-bottom:16px">Can no longer make it? You can cancel here:</p>
+           ${button(ctx.cancelUrl, "Cancel my reservation", "#be123c")}`,
+          `${ctx.restaurantName}${ctx.address ? ` · ${ctx.address}` : ""}${ctx.phone ? ` · ${ctx.phone}` : ""}`,
+        ),
+        owner: null, // reminders go to the guest only
+      };
+    }
     default:
       return { customer: null, owner: null };
   }
 }
 
-/** Send a reservation notification to the guest and/or owner and record it. */
-export async function sendNotification(reservationId: string, type: NotificationType) {
+/**
+ * Load a reservation and build the guest/owner emails for a notification type.
+ * Shared by sendNotification and the reminder pipeline so every email type uses
+ * the same branded layout and the same all-tables / area / notes context.
+ */
+export async function buildReservationEmails(
+  reservationId: string,
+  type: NotificationType,
+): Promise<{ customer: EmailMessage | null; owner: EmailMessage | null } | null> {
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
     include: {
@@ -187,9 +215,15 @@ export async function sendNotification(reservationId: string, type: Notification
     notes: reservation.notes,
     area: area?.name ?? null,
     weatherDependent: area?.kind === "outdoor" && (area?.weatherDependent ?? false),
+    reminderText: settings?.reminderText ?? null,
   };
+  return buildEmails(type, ctx);
+}
 
-  const emails = buildEmails(type, ctx);
+/** Send a reservation notification to the guest and/or owner and record it. */
+export async function sendNotification(reservationId: string, type: NotificationType) {
+  const emails = await buildReservationEmails(reservationId, type);
+  if (!emails) return null;
   const demo = !isEmailConfigured();
 
   for (const [recipientKind, msg] of [

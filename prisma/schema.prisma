@@ -217,6 +217,10 @@ model RestaurantSetting {
   maxReservationsPerSlot Int      @default(0)
   maxCoversPerSlot       Int      @default(0)
   timezone               String   @default("Europe/Tirane")
+  // Automatic reminders
+  reminder24hEnabled Boolean @default(true)
+  reminder2hEnabled  Boolean @default(false)
+  reminderText       String? // optional extra line appended to reminder emails
   updatedAt              DateTime @updatedAt
 }
 

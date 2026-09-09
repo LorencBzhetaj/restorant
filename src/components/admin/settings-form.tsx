@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DAY_NAMES } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -21,6 +22,7 @@ interface Settings {
   address: string | null; email: string | null; currency: string;
   turnDurationMinutes: number; bookingInterval: number; seatingBuffer: number; maxPartySize: number;
   maxReservationsPerSlot: number; maxCoversPerSlot: number;
+  reminder24hEnabled: boolean; reminder2hEnabled: boolean; reminderText: string | null;
 }
 interface OpeningHour { id: string; dayOfWeek: number; startTime: string; endTime: string }
 interface Closure { id: string; startDate: string; endDate: string; reason: string | null }
@@ -42,6 +44,8 @@ export function SettingsForm({
     currency: settings.currency, turnDurationMinutes: settings.turnDurationMinutes,
     bookingInterval: settings.bookingInterval, seatingBuffer: settings.seatingBuffer, maxPartySize: settings.maxPartySize,
     maxReservationsPerSlot: settings.maxReservationsPerSlot, maxCoversPerSlot: settings.maxCoversPerSlot,
+    reminder24hEnabled: settings.reminder24hEnabled, reminder2hEnabled: settings.reminder2hEnabled,
+    reminderText: settings.reminderText ?? "",
   });
 
   function save() {
@@ -90,6 +94,25 @@ export function SettingsForm({
         </p>
         <div className="mt-6 flex justify-end">
           <Button onClick={save} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings</Button>
+        </div>
+      </Section>
+
+      <Section title="Automatic reminders" description="Email reminders sent to guests before their reservation (times in Europe/Tirane).">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+            <div><p className="text-sm font-medium">24-hour reminder</p><p className="text-xs text-muted-foreground">Sent about a day before the reservation.</p></div>
+            <Switch checked={form.reminder24hEnabled} onCheckedChange={(v) => setForm({ ...form, reminder24hEnabled: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+            <div><p className="text-sm font-medium">2-hour reminder</p><p className="text-xs text-muted-foreground">Optional — sent a couple of hours before.</p></div>
+            <Switch checked={form.reminder2hEnabled} onCheckedChange={(v) => setForm({ ...form, reminder2hEnabled: v })} />
+          </div>
+          <FieldFull label="Extra reminder message (optional)">
+            <Textarea value={form.reminderText} onChange={(e) => setForm({ ...form, reminderText: e.target.value })} rows={2} placeholder="e.g. Please let us know of any dietary requirements." />
+          </FieldFull>
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={pending}>{pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings</Button>
+          </div>
         </div>
       </Section>
 

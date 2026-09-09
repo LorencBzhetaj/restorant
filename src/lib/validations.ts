@@ -134,6 +134,9 @@ export const settingsSchema = z.object({
   maxPartySize: z.coerce.number().int().min(1).max(30),
   maxReservationsPerSlot: z.coerce.number().int().min(0).max(200),
   maxCoversPerSlot: z.coerce.number().int().min(0).max(1000),
+  reminder24hEnabled: z.boolean().default(true),
+  reminder2hEnabled: z.boolean().default(false),
+  reminderText: z.string().trim().max(300).optional().or(z.literal("")),
 });
 
 export const slotLimitSchema = z.object({

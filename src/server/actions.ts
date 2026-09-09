@@ -580,6 +580,9 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
     maxPartySize: parsed.data.maxPartySize,
     maxReservationsPerSlot: parsed.data.maxReservationsPerSlot,
     maxCoversPerSlot: parsed.data.maxCoversPerSlot,
+    reminder24hEnabled: parsed.data.reminder24hEnabled,
+    reminder2hEnabled: parsed.data.reminder2hEnabled,
+    reminderText: parsed.data.reminderText || null,
   };
   if (existing) {
     await prisma.restaurantSetting.update({ where: { id: existing.id }, data });
