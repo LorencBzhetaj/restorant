@@ -141,6 +141,34 @@ async function isClosedOn(dateKey: string): Promise<boolean> {
   });
 }
 
+export interface AreaClosureRange {
+  areaId: string;
+  startDateTime: Date;
+  endDateTime: Date;
+}
+
+/** Pure: is `areaId` closed for any part of [slotStart, slotEnd)? */
+export function areaClosedAtSlot(
+  closures: AreaClosureRange[],
+  areaId: string | null,
+  slotStart: Date,
+  slotEnd: Date,
+): boolean {
+  if (!areaId) return false;
+  return closures.some(
+    (c) => c.areaId === areaId && overlaps(slotStart, slotEnd, new Date(c.startDateTime), new Date(c.endDateTime)),
+  );
+}
+
+/** Temporary area closures overlapping [rangeStart, rangeEnd). */
+async function getAreaClosuresInRange(rangeStart: Date, rangeEnd: Date): Promise<AreaClosureRange[]> {
+  const rows = await prisma.areaClosure.findMany({
+    where: { startDateTime: { lt: rangeEnd }, endDateTime: { gt: rangeStart } },
+    select: { areaId: true, startDateTime: true, endDateTime: true },
+  });
+  return rows;
+}
+
 function buildDate(dateStr: string, minutes: number): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d, 0, minutes, 0, 0);
@@ -238,6 +266,7 @@ export async function getAvailableTimes(params: {
 
   const caps = await getSlotCaps();
   const areaKindForCap = requestedArea === "no_preference" ? null : requestedArea;
+  const closures = await getAreaClosuresInRange(dayStart, dayEnd);
 
   const slots: TimeSlot[] = [];
   for (const period of periods) {
@@ -249,6 +278,8 @@ export async function getAvailableTimes(params: {
 
       let freeTables = 0;
       for (const table of tables) {
+        // Skip tables whose area has a temporary closure covering this slot.
+        if (areaClosedAtSlot(closures, table.areaId, start, end)) continue;
         const clash = reservations.some(
           (r) =>
             r.tableId === table.id &&
@@ -381,6 +412,12 @@ export async function isTableBookable(params: {
   const endMin = startMin + settings.turnDurationMinutes;
   const insidePeriod = periods.some((p) => startMin >= p.start && endMin <= p.end);
   if (!insidePeriod) return false;
+
+  // Temporary area closure covering this window?
+  if (table.areaId) {
+    const closures = await getAreaClosuresInRange(start, end);
+    if (areaClosedAtSlot(closures, table.areaId, start, end)) return false;
+  }
 
   const clash = await prisma.reservation.findFirst({
     where: {

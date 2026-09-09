@@ -117,6 +117,48 @@ export async function getAreas() {
   return prisma.area.findMany({ orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] });
 }
 
+/** Current + upcoming temporary area closures, each with the reservations it affects. */
+export async function getClosuresOverview() {
+  const now = new Date();
+  const closures = await prisma.areaClosure.findMany({
+    where: { endDateTime: { gte: now } },
+    orderBy: { startDateTime: "asc" },
+    include: { area: true },
+  });
+
+  const result = [];
+  for (const c of closures) {
+    const rows = await prisma.reservation.findMany({
+      where: {
+        status: { in: ["Confirmed", "Seated"] },
+        table: { areaId: c.areaId },
+        startDateTime: { lt: c.endDateTime },
+        endDateTime: { gt: c.startDateTime },
+      },
+      orderBy: { startDateTime: "asc" },
+      include: { customer: true, table: true },
+    });
+    result.push({
+      id: c.id,
+      areaId: c.areaId,
+      areaName: c.area.name,
+      areaKind: c.area.kind,
+      startDateTime: c.startDateTime,
+      endDateTime: c.endDateTime,
+      reason: c.reason,
+      affected: rows.map((r) => ({
+        id: r.id,
+        start: r.startDateTime,
+        partySize: r.partySize,
+        customerName: `${r.customer.firstName} ${r.customer.lastName}`,
+        tableName: r.table.name,
+        requestedArea: r.requestedArea,
+      })),
+    });
+  }
+  return result;
+}
+
 /** Areas + (for closed areas) upcoming reservations that may need moving. */
 export async function getAreasOverview() {
   const now = new Date();

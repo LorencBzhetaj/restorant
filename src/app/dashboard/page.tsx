@@ -11,20 +11,46 @@ import {
   UserX,
   ArrowRight,
 } from "lucide-react";
-import { getDashboardData, getAreasOverview } from "@/server/data";
+import { getDashboardData, getAreasOverview, getClosuresOverview, getAreas } from "@/server/data";
 import { formatTime, formatDate } from "@/lib/format";
 import { StatCard } from "@/components/admin/stat-card";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { RevenueChart, AppointmentsChart, HorizontalCountChart } from "@/components/admin/charts";
 import { AreaControls } from "@/components/admin/area-controls";
+import { ClosuresManager } from "@/components/admin/closures-manager";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [d, areasOverview] = await Promise.all([getDashboardData(), getAreasOverview()]);
+  const [d, areasOverview, closures, areas] = await Promise.all([
+    getDashboardData(),
+    getAreasOverview(),
+    getClosuresOverview(),
+    getAreas(),
+  ]);
 
   return (
     <div className="space-y-6">
+      <ClosuresManager
+        areas={areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind }))}
+        closures={closures.map((c) => ({
+          id: c.id,
+          areaId: c.areaId,
+          areaName: c.areaName,
+          areaKind: c.areaKind,
+          startDateTime: c.startDateTime.toISOString(),
+          endDateTime: c.endDateTime.toISOString(),
+          reason: c.reason,
+          affected: c.affected.map((a) => ({
+            id: a.id,
+            start: a.start.toISOString(),
+            partySize: a.partySize,
+            customerName: a.customerName,
+            tableName: a.tableName,
+            requestedArea: a.requestedArea,
+          })),
+        }))}
+      />
       <AreaControls
         areas={areasOverview.areas}
         affected={areasOverview.affected.map((a) => ({ ...a, start: a.start.toISOString() }))}

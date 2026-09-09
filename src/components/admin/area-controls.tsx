@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Home, Trees, AlertTriangle, ArrowRight } from "lucide-react";
@@ -36,7 +36,7 @@ export function AreaControls({ areas, affected }: { areas: Area[]; affected: Aff
     startTransition(async () => {
       const res = await toggleAreaOpen(id, next);
       if (res.ok) {
-        toast.success(next ? "Area opened" : "Area closed");
+        toast.success(next ? "Area activated" : "Area deactivated");
         router.refresh();
       } else toast.error(res.error);
     });
@@ -44,8 +44,10 @@ export function AreaControls({ areas, affected }: { areas: Area[]; affected: Aff
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">
-      <h2 className="mb-1 font-semibold">Seating areas</h2>
-      <p className="mb-4 text-sm text-muted-foreground">Close an area (e.g. bad weather) to stop new bookings there instantly.</p>
+      <h2 className="mb-1 font-semibold">Seating areas — permanent status</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Turn an area on/off for a whole season or indefinitely. For rain or a one-off event, use a temporary closure above instead.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         {areas.map((a) => {
           const mine = affected.filter((x) => x.areaId === a.id);
@@ -62,7 +64,7 @@ export function AreaControls({ areas, affected }: { areas: Area[]; affected: Aff
                 <span className="inline-flex items-center gap-2 font-medium">
                   <Icon className="size-4 text-brand" /> {a.name}
                   <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", a.isOpen ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300")}>
-                    {a.isOpen ? "OPEN" : "CLOSED"}
+                    {a.isOpen ? "ACTIVE" : "INACTIVE"}
                   </span>
                 </span>
                 <Switch checked={a.isOpen} onCheckedChange={(v) => toggle(a.id, v)} disabled={pending} />

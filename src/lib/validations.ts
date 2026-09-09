@@ -50,6 +50,24 @@ export const areaSchema = z.object({
   priority: z.coerce.number().int().min(0).max(99).default(0),
 });
 
+export const areaClosureSchema = z
+  .object({
+    areaId: z.string().min(1, "Select an area"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date"),
+    fullDay: z.boolean().default(true),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal("")),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/).optional().or(z.literal("")),
+    reason: z.string().trim().max(200).optional().or(z.literal("")),
+  })
+  .refine((v) => v.fullDay || (!!v.startTime && !!v.endTime), {
+    message: "Set a start and end time (or choose full day)",
+    path: ["startTime"],
+  })
+  .refine((v) => v.fullDay || (v.startTime ?? "") < (v.endTime ?? ""), {
+    message: "End time must be after start time",
+    path: ["endTime"],
+  });
+
 export const openingHourSchema = z.object({
   dayOfWeek: z.coerce.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),

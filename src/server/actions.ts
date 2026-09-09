@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isTableBookable, getSettings, slotHasCapacity } from "@/lib/availability";
+import { isTableBookable, getSettings, slotHasCapacity, areaClosedAtSlot } from "@/lib/availability";
 import { sendNotification } from "@/lib/notifications";
 import { toDateKey, pad2 } from "@/lib/format";
 import {
@@ -15,7 +15,9 @@ import {
   settingsSchema,
   slotLimitSchema,
   areaSchema,
+  areaClosureSchema,
 } from "@/lib/validations";
+import { isAdmin } from "@/lib/require-admin";
 import { ReservationStatus, NotificationType } from "@/lib/constants";
 
 export type ActionResult<T = undefined> =
@@ -81,9 +83,16 @@ async function assignTableTx(
   });
   const busyIds = new Set(busy.map((b) => b.tableId));
 
+  // Temporary area closures covering this window.
+  const closures = await tx.areaClosure.findMany({
+    where: { startDateTime: { lt: p.end }, endDateTime: { gt: p.start } },
+    select: { areaId: true, startDateTime: true, endDateTime: true },
+  });
+
   if (p.requestedTableId !== "any") {
     const t = await tx.restaurantTable.findUnique({ where: { id: p.requestedTableId }, include: { area: true } });
     if (!t || !t.isActive || t.seats < p.partySize || busyIds.has(t.id)) return null;
+    if (areaClosedAtSlot(closures, t.areaId, p.start, p.end)) return null;
     return { id: t.id, areaKind: t.area?.kind ?? null };
   }
 
@@ -100,6 +109,7 @@ async function assignTableTx(
   });
   const eligible = tables
     .filter((t) => (t.areaId ? openIds.has(t.areaId) : p.requestedArea === "no_preference"))
+    .filter((t) => !areaClosedAtSlot(closures, t.areaId, p.start, p.end))
     .sort(
       (a, b) =>
         (prioOf.get(a.areaId ?? "") ?? 99) - (prioOf.get(b.areaId ?? "") ?? 99) ||
@@ -354,6 +364,70 @@ export async function deleteArea(id: string): Promise<ActionResult> {
   if (tableCount > 0) return { ok: false, error: "Move or delete this area's tables first." };
   await prisma.area.delete({ where: { id } });
   revalidatePath("/dashboard/tables");
+  return { ok: true };
+}
+
+// ---- Area closures (temporary, date/time-specific) -------------------------
+function buildClosureRange(date: string, fullDay: boolean, startTime?: string, endTime?: string): { start: Date; end: Date } {
+  const [y, m, d] = date.split("-").map(Number);
+  if (fullDay) {
+    return { start: new Date(y, m - 1, d, 0, 0, 0, 0), end: new Date(y, m - 1, d + 1, 0, 0, 0, 0) };
+  }
+  const [sh, sm] = (startTime as string).split(":").map(Number);
+  const [eh, em] = (endTime as string).split(":").map(Number);
+  return { start: new Date(y, m - 1, d, sh, sm, 0, 0), end: new Date(y, m - 1, d, eh, em, 0, 0) };
+}
+
+async function closureOverlaps(areaId: string, start: Date, end: Date, ignoreId?: string): Promise<boolean> {
+  const clash = await prisma.areaClosure.findFirst({
+    where: {
+      areaId,
+      startDateTime: { lt: end },
+      endDateTime: { gt: start },
+      ...(ignoreId ? { id: { not: ignoreId } } : {}),
+    },
+    select: { id: true },
+  });
+  return Boolean(clash);
+}
+
+export async function addAreaClosure(raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  const parsed = areaClosureSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const { areaId, date, fullDay, startTime, endTime, reason } = parsed.data;
+  const { start, end } = buildClosureRange(date, fullDay, startTime || undefined, endTime || undefined);
+  if (await closureOverlaps(areaId, start, end)) {
+    return { ok: false, error: "This overlaps an existing closure for that area." };
+  }
+  await prisma.areaClosure.create({
+    data: { areaId, startDateTime: start, endDateTime: end, reason: reason || null },
+  });
+  revalidateAdmin();
+  return { ok: true };
+}
+
+export async function updateAreaClosure(id: string, raw: unknown): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  const parsed = areaClosureSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
+  const { areaId, date, fullDay, startTime, endTime, reason } = parsed.data;
+  const { start, end } = buildClosureRange(date, fullDay, startTime || undefined, endTime || undefined);
+  if (await closureOverlaps(areaId, start, end, id)) {
+    return { ok: false, error: "This overlaps an existing closure for that area." };
+  }
+  await prisma.areaClosure.update({
+    where: { id },
+    data: { areaId, startDateTime: start, endDateTime: end, reason: reason || null },
+  });
+  revalidateAdmin();
+  return { ok: true };
+}
+
+export async function deleteAreaClosure(id: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  await prisma.areaClosure.delete({ where: { id } });
+  revalidateAdmin();
   return { ok: true };
 }
 

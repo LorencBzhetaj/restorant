@@ -17,14 +17,34 @@ model Area {
   id               String  @id @default(cuid())
   name             String // "Indoor", "Outdoor", "Terrace"…
   kind             String  @default("indoor") // indoor | outdoor
-  isOpen           Boolean @default(true) // staff toggle (e.g. closed for weather)
+  isOpen           Boolean @default(true) // PERMANENT status: true = active, false = inactive (seasonal/indefinite)
   weatherDependent Boolean @default(false)
   priority         Int     @default(0) // lower = preferred for "no preference"
   sortOrder        Int     @default(0)
 
-  tables RestaurantTable[]
+  tables   RestaurantTable[]
+  closures AreaClosure[]
 
   @@index([kind])
+}
+
+// A temporary closure of an area for a specific date/time window (rain, cold,
+// private event…). Distinct from the permanent isOpen status: it only affects
+// the given window and never disables future dates.
+model AreaClosure {
+  id            String   @id @default(cuid())
+  areaId        String
+  startDateTime DateTime
+  endDateTime   DateTime
+  reason        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  area Area @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([areaId])
+  @@index([startDateTime])
+  @@index([endDateTime])
 }
 
 model RestaurantTable {
