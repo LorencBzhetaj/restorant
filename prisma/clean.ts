@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { guardDestructiveWrite } from "./guard-production";
 
 const prisma = new PrismaClient();
 
@@ -6,8 +7,11 @@ const prisma = new PrismaClient();
  * Production clean: removes all demo reservations, customers and notifications,
  * but KEEPS tables, opening hours, closures and settings. Also ensures the
  * "max 4 reservations at 18:00" rule exists.
+ *
+ * DESTRUCTIVE: refuses to run against a remote database without --confirm.
  */
 async function main() {
+  guardDestructiveWrite("db:clean");
   const n = await prisma.notification.deleteMany();
   const r = await prisma.reservation.deleteMany();
   const c = await prisma.customer.deleteMany();

@@ -12,7 +12,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:clean": "tsx prisma/clean.ts",
     "bootstrap:villa-gjecaj": "tsx prisma/bootstrap-villa-gjecaj.ts",
-    "test": "cross-env TZ=Europe/Tirane DATABASE_URL=postgresql://test:test@localhost:5433/resto_test DIRECT_URL=postgresql://test:test@localhost:5433/resto_test vitest run"
+    "test": "cross-env NODE_ENV=test TZ=Europe/Tirane TEST_DATABASE_URL=postgresql://test:test@localhost:5433/resto_test vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
