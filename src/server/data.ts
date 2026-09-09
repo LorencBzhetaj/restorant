@@ -88,9 +88,19 @@ export async function getReservations() {
     include: {
       customer: true,
       table: true,
+      tables: { include: { table: true } },
       notifications: { orderBy: { createdAt: "desc" } },
     },
   });
+}
+
+/** All assigned table names for a reservation ("T1 + T2" for a combination). */
+export function assignedTableName(r: {
+  table: { name: string };
+  tables?: { table: { name: string } }[];
+}): string {
+  if (r.tables && r.tables.length > 0) return r.tables.map((rt) => rt.table.name).join(" + ");
+  return r.table.name;
 }
 
 export async function getReservationsInRange(start: Date, end: Date) {
@@ -115,6 +125,13 @@ export async function getSlotLimits() {
 
 export async function getAreas() {
   return prisma.area.findMany({ orderBy: [{ priority: "asc" }, { sortOrder: "asc" }] });
+}
+
+export async function getCombinations() {
+  return prisma.tableCombination.findMany({
+    orderBy: [{ areaId: "asc" }, { priority: "asc" }, { maxSeats: "asc" }],
+    include: { area: true, members: { include: { table: true } } },
+  });
 }
 
 /** Current + upcoming temporary area closures, each with the reservations it affects. */

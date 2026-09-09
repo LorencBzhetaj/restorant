@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getReservations, getActiveTables, getRestaurant } from "@/server/data";
+import { getReservations, getActiveTables, getRestaurant, assignedTableName } from "@/server/data";
 import { FloorView } from "@/components/admin/floor-view";
 import type { AdminReservation } from "@/components/admin/reservation-detail";
 
@@ -21,7 +21,7 @@ export default async function FloorPage() {
     source: r.source,
     notes: r.notes,
     tableId: r.tableId,
-    tableName: r.table.name,
+    tableName: assignedTableName(r),
     tableSection: r.table.section,
     customerName: `${r.customer.firstName} ${r.customer.lastName}`,
     customerPhone: r.customer.phone,

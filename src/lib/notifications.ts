@@ -158,19 +158,28 @@ function buildEmails(
 export async function sendNotification(reservationId: string, type: NotificationType) {
   const reservation = await prisma.reservation.findUnique({
     where: { id: reservationId },
-    include: { customer: true, table: { include: { area: true } } },
+    include: {
+      customer: true,
+      table: { include: { area: true } },
+      tables: { include: { table: true } },
+    },
   });
   if (!reservation) return null;
 
   const settings = await prisma.restaurantSetting.findFirst();
   const area = reservation.table.area;
+  // Show every assigned table (a combined booking holds several); fall back to
+  // the primary table if the join is somehow empty.
+  const assignedTables =
+    reservation.tables.length > 0 ? reservation.tables.map((rt) => rt.table) : [reservation.table];
+  const tableLabel = assignedTables.map((t) => t.name).join(" + ");
   const ctx: Ctx = {
     customerName: `${reservation.customer.firstName} ${reservation.customer.lastName}`.trim(),
     customerEmail: reservation.customer.email,
     ownerEmail: settings?.email ?? null,
     restaurantName: settings?.name ?? "Gjeçaj Alpine Restaurant Cuisine",
     address: settings?.address ?? "",
-    tableName: `${reservation.table.name} · ${reservation.table.section}`,
+    tableName: assignedTables.length > 1 ? `${tableLabel} · ${area?.name ?? reservation.table.section}` : `${reservation.table.name} · ${reservation.table.section}`,
     partySize: reservation.partySize,
     phone: reservation.customer.phone,
     start: new Date(reservation.startDateTime),

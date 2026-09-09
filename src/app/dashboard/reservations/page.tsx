@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { getReservations, getActiveTables } from "@/server/data";
+import { getReservations, getActiveTables, assignedTableName } from "@/server/data";
 import { ReservationsManager } from "@/components/admin/reservations-manager";
 import type { AdminReservation } from "@/components/admin/reservation-detail";
 
@@ -17,7 +17,7 @@ export default async function ReservationsPage() {
     source: r.source,
     notes: r.notes,
     tableId: r.tableId,
-    tableName: r.table.name,
+    tableName: assignedTableName(r),
     tableSection: r.table.section,
     customerName: `${r.customer.firstName} ${r.customer.lastName}`,
     customerPhone: r.customer.phone,
