@@ -30,7 +30,7 @@
   window.addEventListener("message", function (e) {
     if (e.origin !== origin) return;
     var d = e.data;
-    if (d && d.type === "terrazza:resize" && typeof d.height === "number") {
+    if (d && d.type === "gjecaj:resize" && typeof d.height === "number") {
       iframe.style.height = Math.max(d.height, 480) + "px";
     }
   });
