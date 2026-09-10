@@ -64,9 +64,9 @@ export function ReserveForm({
         <div className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950">
           <CheckCircle2 className="size-9" />
         </div>
-        <h1 className="mt-6 font-heading text-3xl font-semibold tracking-tight">Table reserved!</h1>
+        <h1 className="mt-6 font-heading text-3xl font-medium tracking-tight sm:text-4xl">Table reserved!</h1>
         <p className="mt-2 text-muted-foreground">We can&apos;t wait to host you.</p>
-        <div className="mt-8 rounded-xl border border-border bg-card p-6 text-left">
+        <div className="mt-8 rounded-2xl border border-border/70 bg-card p-6 text-left shadow-sm">
           <SummaryRows summary={summary} />
         </div>
         <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
@@ -140,9 +140,13 @@ export function ReserveForm({
       </form>
 
       <aside className="order-1 md:order-2">
-        <div className="rounded-xl border border-border bg-card p-6 md:sticky md:top-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Your reservation</h2>
-          <div className="mt-4"><SummaryRows summary={summary} /></div>
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm md:sticky md:top-6">
+          <div className="border-b border-border/70 bg-gradient-to-b from-brand/[0.06] to-transparent px-6 py-4">
+            <h2 className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+              <CheckCircle2 className="size-4 text-brand" /> Your reservation
+            </h2>
+          </div>
+          <div className="p-6"><SummaryRows summary={summary} /></div>
         </div>
       </aside>
     </div>
@@ -164,7 +168,7 @@ function SummaryRows({ summary }: { summary: Summary }) {
 function Row({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <dt className="inline-flex items-center gap-2 text-muted-foreground"><Icon className="size-4" /> {label}</dt>
+      <dt className="inline-flex items-center gap-2 text-muted-foreground"><Icon className="size-4 text-brand/70" /> {label}</dt>
       <dd className="text-right font-medium">{value}</dd>
     </div>
   );

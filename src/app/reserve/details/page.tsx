@@ -24,9 +24,11 @@ export default async function ReserveDetailsPage({
 
   return (
     <div>
-      <div className="mb-8 text-center">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Your details</h1>
-        <p className="mt-2 text-muted-foreground">Almost done — just a few details to confirm.</p>
+      <div className="mb-10 text-center">
+        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-brand">Almost there</p>
+        <h1 className="font-heading text-4xl font-medium tracking-tight sm:text-[2.75rem] sm:leading-[1.05]">Your details</h1>
+        <p className="mt-3 text-[15px] text-muted-foreground">Just a few details to confirm your table.</p>
+        <span className="mx-auto mt-5 block h-px w-16 bg-gradient-to-r from-transparent via-brand/50 to-transparent" />
       </div>
       <ReserveForm
         tableId={tableId}
