@@ -43,7 +43,7 @@ export function AreaControls({ areas, affected }: { areas: Area[]; affected: Aff
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-5">
       <h2 className="mb-1 font-semibold">Seating areas — permanent status</h2>
       <p className="mb-4 text-sm text-muted-foreground">
         Turn an area on/off for a whole season or indefinitely. For rain or a one-off event, use a temporary closure above instead.

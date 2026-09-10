@@ -74,7 +74,7 @@ export function TablesManager({ tables, areas }: { tables: TableRow[]; areas: Ar
   return (
     <div className="space-y-6">
       {/* Floor preview */}
-      <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
+      <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="font-semibold">Floor plan</h2>
@@ -86,7 +86,7 @@ export function TablesManager({ tables, areas }: { tables: TableRow[]; areas: Ar
       </div>
 
       {/* Table list */}
-      <div className="rounded-xl border border-border bg-card">
+      <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>

@@ -37,20 +37,22 @@ function layout(brand: string, logoUrl: string | null, title: string, bodyHtml: 
   // images are blocked. Constrained height avoids oversized logos.
   const header =
     logoUrl && /^https:\/\//i.test(logoUrl)
-      ? `<img src="${logoUrl}" alt="${brand}" height="40" style="max-height:40px;width:auto;display:block;border:0;outline:none" />`
-      : `<span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:.5px">${brand}</span>`;
+      ? `<img src="${logoUrl}" alt="${brand}" height="48" style="max-height:48px;width:auto;display:inline-block;border:0;outline:none" />`
+      : `<span style="color:#fff;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;letter-spacing:.3px">${brand}</span>`;
   return `
-  <div style="background:#f6f5f3;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
-    <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #eee">
-      <div style="background:${BRAND};padding:20px 24px">
+  <div style="background:#f4f1ee;padding:32px 16px;font-family:Arial,Helvetica,sans-serif;color:#1c1917">
+    <div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #eae6e2;box-shadow:0 1px 3px rgba(60,40,20,0.06)">
+      <div style="background:${BRAND};padding:26px 24px;text-align:center">
         ${header}
       </div>
-      <div style="padding:24px">
-        <h1 style="margin:0 0 12px;font-size:20px">${title}</h1>
+      <div style="height:3px;background:linear-gradient(90deg,#d98b63,${BRAND},#9c4a2a)"></div>
+      <div style="padding:30px 28px">
+        <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:23px;font-weight:600;line-height:1.25;color:#1c1917">${title}</h1>
         ${bodyHtml}
       </div>
-      ${footer ? `<div style="padding:16px 24px;border-top:1px solid #eee;color:#78716c;font-size:12px">${footer}</div>` : ""}
+      ${footer ? `<div style="padding:18px 28px;border-top:1px solid #f0ece8;color:#8a827b;font-size:12px;text-align:center;line-height:1.6">${footer}</div>` : ""}
     </div>
+    <p style="max-width:540px;margin:16px auto 0;text-align:center;color:#b3aaa2;font-size:11px;letter-spacing:.3px">${brand}</p>
   </div>`;
 }
 
@@ -64,18 +66,18 @@ function detailsTable(ctx: Ctx): string {
     ...(ctx.area ? [["Area", ctx.area] as [string, string]] : []),
     ...(ctx.notes ? [["Special requests", ctx.notes] as [string, string]] : []),
   ];
-  return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 20px">
+  return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 22px;background:#faf8f6;border:1px solid #f0ece8;border-radius:12px">
     ${rows
       .map(
-        ([k, v]) =>
-          `<tr><td style="padding:6px 0;color:#78716c">${k}</td><td style="padding:6px 0;text-align:right;font-weight:600">${v}</td></tr>`,
+        ([k, v], i) =>
+          `<tr><td style="padding:11px 16px;color:#8a827b;${i > 0 ? "border-top:1px solid #f0ece8" : ""}">${k}</td><td style="padding:11px 16px;text-align:right;font-weight:600;color:#292524;${i > 0 ? "border-top:1px solid #f0ece8" : ""}">${v}</td></tr>`,
       )
       .join("")}
   </table>`;
 }
 
 function button(url: string, label: string, color = BRAND): string {
-  return `<a href="${url}" style="display:inline-block;background:${color};color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 20px;border-radius:8px">${label}</a>`;
+  return `<a href="${url}" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:13px 26px;border-radius:10px;box-shadow:0 1px 2px rgba(60,40,20,0.15)">${label}</a>`;
 }
 
 /** Returns the email for each recipient (or null when not applicable). */

@@ -26,7 +26,7 @@ export function CustomerTable({ customers }: { customers: Row[] }) {
   const filtered = customers.filter((c) => `${c.firstName} ${c.lastName} ${c.phone}`.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className="rounded-xl border border-border bg-card">
+    <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-semibold">All guests</h2>

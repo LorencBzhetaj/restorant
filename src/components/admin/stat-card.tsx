@@ -22,15 +22,15 @@ export function StatCard({
   }[accent ?? "brand"];
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
-        <span className={cn("grid size-9 place-items-center rounded-lg", accentClass)}>
+        <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
+        <span className={cn("grid size-9 place-items-center rounded-xl", accentClass)}>
           <Icon className="size-4.5" />
         </span>
       </div>
-      <div className="mt-3 font-heading text-3xl font-semibold tracking-tight">{value}</div>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      <div className="mt-3 font-heading text-[2rem] font-medium leading-none tracking-tight tabular-nums">{value}</div>
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

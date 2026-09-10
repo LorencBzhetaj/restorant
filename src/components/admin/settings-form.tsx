@@ -307,7 +307,7 @@ function ClosuresEditor({ closures }: { closures: Closure[] }) {
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5 sm:p-6">
+    <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-5 sm:p-6">
       <div className="mb-5">
         <h2 className="font-semibold">{title}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

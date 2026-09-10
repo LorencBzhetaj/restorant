@@ -79,7 +79,7 @@ export function ClosuresManager({ areas, closures }: { areas: AreaOpt[]; closure
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold">Temporary closures</h2>

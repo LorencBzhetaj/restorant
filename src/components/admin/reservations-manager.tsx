@@ -67,7 +67,7 @@ export function ReservationsManager({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
+      <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>

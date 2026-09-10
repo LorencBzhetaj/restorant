@@ -27,7 +27,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         <div className="space-y-6">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-6">
             <div className="flex items-center gap-4">
               <div className="grid size-14 place-items-center rounded-full bg-brand/10 font-heading text-xl font-semibold text-brand">
                 {customer.firstName[0]}{customer.lastName[0]}
@@ -44,7 +44,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-6">
             <h2 className="mb-3 font-semibold">Notes</h2>
             <CustomerNotes id={customer.id} notes={customer.notes ?? ""} />
           </div>
@@ -62,7 +62,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <MiniStat label="Favourite area" value={s.favoriteSection ?? "—"} icon={MapPin} />
           </div>
 
-          <div className="rounded-xl border border-border bg-card">
+          <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
             <div className="flex items-center gap-2 border-b border-border px-5 py-4">
               <CalendarCheck className="size-4 text-muted-foreground" />
               <h2 className="font-semibold">Reservation history</h2>
@@ -107,7 +107,7 @@ function Contact({ icon: Icon, value, href }: { icon: React.ElementType; value: 
 
 function MiniStat({ label, value, icon: Icon }: { label: string; value: string | number; icon?: React.ElementType }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-border/70 bg-card shadow-sm p-4">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">{Icon && <Icon className="size-3.5" />} {label}</div>
       <div className="mt-1 truncate font-heading text-lg font-semibold">{value}</div>
     </div>

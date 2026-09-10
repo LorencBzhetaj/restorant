@@ -31,6 +31,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Overview</p>
+        <h1 className="font-heading text-2xl font-medium tracking-tight">Dashboard</h1>
+      </div>
       <ClosuresManager
         areas={areas.map((a) => ({ id: a.id, name: a.name, kind: a.kind }))}
         closures={closures.map((c) => ({
@@ -85,9 +89,9 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-semibold">Today&apos;s bookings</h2>
+        <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+            <h2 className="font-heading text-base font-medium tracking-tight">Today&apos;s bookings</h2>
             <Link href="/dashboard/floor" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
               Floor plan <ArrowRight className="size-3.5" />
             </Link>
@@ -107,9 +111,9 @@ export default async function DashboardPage() {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h2 className="font-semibold">Upcoming reservations</h2>
+        <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+            <h2 className="font-heading text-base font-medium tracking-tight">Upcoming reservations</h2>
             <Link href="/dashboard/reservations" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
               All <ArrowRight className="size-3.5" />
             </Link>
@@ -138,10 +142,10 @@ export default async function DashboardPage() {
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="mb-4">
-        <h2 className="font-semibold">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+    <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm">
+      <div className="mb-5">
+        <h2 className="font-heading text-lg font-medium tracking-tight">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
       {children}
     </div>
