@@ -10,7 +10,6 @@ vi.mock("@/lib/email", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { buildReservationEmails } from "@/lib/notifications";
-import { updateSettings } from "@/server/actions";
 
 const LOGO = "https://booking.gjecaj.al/logo.png";
 let tableId = "";
@@ -35,15 +34,6 @@ async function seed(logoUrl: string | null) {
   });
   await prisma.reservationTable.create({ data: { reservationId: res.id, tableId } });
   return res.id;
-}
-
-function validSettings(over: Record<string, unknown>) {
-  return {
-    name: "Villa Gjecaj", tagline: "", phone: "", whatsapp: "", address: "", email: "owner@test.local",
-    currency: "EUR", turnDurationMinutes: 120, bookingInterval: 30, seatingBuffer: 15, maxPartySize: 12,
-    maxReservationsPerSlot: 0, maxCoversPerSlot: 0, reminder24hEnabled: true, reminder2hEnabled: false, reminderText: "",
-    logoUrl: "", websiteUrl: "", brandColor: "", ...over,
-  };
 }
 
 describe("branding", () => {
@@ -73,17 +63,12 @@ describe("branding", () => {
     expect(emails?.customer?.html).toContain(`<img src="${LOGO}"`);
   });
 
-  it("settings validation rejects a non-https logo URL", async () => {
-    await seed(null);
-    const res = await updateSettings(validSettings({ logoUrl: "http://insecure.example.com/logo.png" }));
-    expect(res.ok).toBe(false);
-  });
-
-  it("settings validation accepts a https logo URL", async () => {
-    await seed(null);
-    const res = await updateSettings(validSettings({ logoUrl: LOGO }));
-    expect(res.ok).toBe(true);
-    const s = await prisma.restaurantSetting.findFirst();
-    expect(s?.logoUrl).toBe(LOGO);
+  it("every email type uses the branded layout with the logo", async () => {
+    const id = await seed(LOGO);
+    for (const type of ["BookingConfirmation", "Cancellation", "Reschedule", "Completed", "Reminder24h", "Reminder2h"] as const) {
+      const emails = await buildReservationEmails(id, type);
+      const html = emails?.customer?.html ?? emails?.owner?.html ?? "";
+      if (html) expect(html).toContain(`<img src="${LOGO}"`);
+    }
   });
 });

@@ -587,7 +587,8 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
     whatsapp: parsed.data.whatsapp || null,
     address: parsed.data.address || null,
     email: parsed.data.email || null,
-    logoUrl: parsed.data.logoUrl || null,
+    // logoUrl is intentionally NOT set here — it is managed by the dedicated
+    // upload/remove branding actions so a general settings save never clears it.
     websiteUrl: parsed.data.websiteUrl || null,
     brandColor: parsed.data.brandColor || null,
     currency: parsed.data.currency,

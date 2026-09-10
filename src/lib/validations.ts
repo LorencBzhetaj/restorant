@@ -127,13 +127,6 @@ export const settingsSchema = z.object({
   whatsapp: z.string().trim().max(40).optional().or(z.literal("")),
   address: z.string().trim().max(200).optional().or(z.literal("")),
   email: z.string().trim().max(120).optional().or(z.literal("")),
-  logoUrl: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((v) => v === "" || /^https:\/\/.+/i.test(v), "Logo must be a public https:// URL")
-    .optional()
-    .or(z.literal("")),
   websiteUrl: z
     .string()
     .trim()

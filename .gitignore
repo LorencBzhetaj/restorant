@@ -44,3 +44,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local-only logo uploads (dev fallback when no Blob store)
+/public/branding/local/
