@@ -1,0 +1,34 @@
+{
+  "_note": "Villa Gjecaj real tables — 9 Indoor + 17 Outdoor, each 4 seats (adjust names/seats/positions from the dashboard anytime). No combinations defined yet; add them in the dashboard or here later. Import with: npm run import:tables -- config/villa-gjecaj-tables.json --confirm",
+  "expectedCounts": { "indoor": 9, "outdoor": 17 },
+  "tables": [
+    { "name": "I1", "area": "indoor", "maxSeats": 4, "x": 0, "y": 0 },
+    { "name": "I2", "area": "indoor", "maxSeats": 4, "x": 3, "y": 0 },
+    { "name": "I3", "area": "indoor", "maxSeats": 4, "x": 6, "y": 0 },
+    { "name": "I4", "area": "indoor", "maxSeats": 4, "x": 9, "y": 0 },
+    { "name": "I5", "area": "indoor", "maxSeats": 4, "x": 0, "y": 3 },
+    { "name": "I6", "area": "indoor", "maxSeats": 4, "x": 3, "y": 3 },
+    { "name": "I7", "area": "indoor", "maxSeats": 4, "x": 6, "y": 3 },
+    { "name": "I8", "area": "indoor", "maxSeats": 4, "x": 9, "y": 3 },
+    { "name": "I9", "area": "indoor", "maxSeats": 4, "x": 0, "y": 6 },
+
+    { "name": "O1", "area": "outdoor", "maxSeats": 4, "x": 0, "y": 0 },
+    { "name": "O2", "area": "outdoor", "maxSeats": 4, "x": 2, "y": 0 },
+    { "name": "O3", "area": "outdoor", "maxSeats": 4, "x": 4, "y": 0 },
+    { "name": "O4", "area": "outdoor", "maxSeats": 4, "x": 6, "y": 0 },
+    { "name": "O5", "area": "outdoor", "maxSeats": 4, "x": 8, "y": 0 },
+    { "name": "O6", "area": "outdoor", "maxSeats": 4, "x": 10, "y": 0 },
+    { "name": "O7", "area": "outdoor", "maxSeats": 4, "x": 0, "y": 2 },
+    { "name": "O8", "area": "outdoor", "maxSeats": 4, "x": 2, "y": 2 },
+    { "name": "O9", "area": "outdoor", "maxSeats": 4, "x": 4, "y": 2 },
+    { "name": "O10", "area": "outdoor", "maxSeats": 4, "x": 6, "y": 2 },
+    { "name": "O11", "area": "outdoor", "maxSeats": 4, "x": 8, "y": 2 },
+    { "name": "O12", "area": "outdoor", "maxSeats": 4, "x": 10, "y": 2 },
+    { "name": "O13", "area": "outdoor", "maxSeats": 4, "x": 0, "y": 4 },
+    { "name": "O14", "area": "outdoor", "maxSeats": 4, "x": 2, "y": 4 },
+    { "name": "O15", "area": "outdoor", "maxSeats": 4, "x": 4, "y": 4 },
+    { "name": "O16", "area": "outdoor", "maxSeats": 4, "x": 6, "y": 4 },
+    { "name": "O17", "area": "outdoor", "maxSeats": 4, "x": 8, "y": 4 }
+  ],
+  "combinations": []
+}
