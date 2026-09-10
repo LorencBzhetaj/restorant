@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { NotificationType } from "./constants";
 import { formatDateLong, formatTime } from "./format";
 import { sendEmail, appUrl, isEmailConfigured, type EmailMessage } from "./email";
+import { resolveLogoUrl } from "./branding";
 
 /**
  * Reservation notifications — delivered by EMAIL to both the guest and the
@@ -224,7 +225,9 @@ export async function buildReservationEmails(
     area: area?.name ?? null,
     weatherDependent: area?.kind === "outdoor" && (area?.weatherDependent ?? false),
     reminderText: settings?.reminderText ?? null,
-    logoUrl: settings?.logoUrl ?? null,
+    // Uploaded logo if set, otherwise the bundled Villa Gjeçaj default (absolute
+    // URL so email clients can load it; only rendered when https).
+    logoUrl: resolveLogoUrl(settings?.logoUrl ?? null, appUrl()),
   };
   return buildEmails(type, ctx);
 }

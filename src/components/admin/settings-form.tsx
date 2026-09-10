@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LogoUploader } from "@/components/admin/logo-uploader";
+import { BUNDLED_LOGO_PATH } from "@/lib/branding";
 import { DAY_NAMES } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import {
@@ -86,7 +87,7 @@ export function SettingsForm({
       <Section title="Branding" description="Logo and website. Shown in the dashboard and at the top of guest emails.">
         <div className="space-y-1.5">
           <Label>Logo</Label>
-          <LogoUploader currentUrl={settings.logoUrl} name={settings.name} />
+          <LogoUploader currentUrl={settings.logoUrl} fallbackUrl={BUNDLED_LOGO_PATH} name={settings.name} />
         </div>
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Field label="Website URL"><Input value={form.websiteUrl} onChange={(e) => setForm({ ...form, websiteUrl: e.target.value })} placeholder="https://gjecaj.al" /></Field>

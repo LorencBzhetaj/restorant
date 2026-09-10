@@ -14,13 +14,14 @@ import { uploadLogo, removeLogo } from "@/server/branding-actions";
 const ACCEPT = "image/png,image/jpeg,image/webp";
 const MAX_BYTES = 2 * 1024 * 1024;
 
-export function LogoUploader({ currentUrl, name }: { currentUrl: string | null; name: string }) {
+export function LogoUploader({ currentUrl, fallbackUrl = null, name }: { currentUrl: string | null; fallbackUrl?: string | null; name: string }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [preview, setPreview] = useState<string | null>(null); // object URL of the picked file
   const [pickedName, setPickedName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
   const initial = name.trim().charAt(0).toUpperCase() || "G";
 
   function pick() {
@@ -41,6 +42,7 @@ export function LogoUploader({ currentUrl, name }: { currentUrl: string | null; 
       return;
     }
     if (preview) URL.revokeObjectURL(preview);
+    setImgFailed(false);
     setPreview(URL.createObjectURL(file));
     setPickedName(file.name);
   }
@@ -81,23 +83,25 @@ export function LogoUploader({ currentUrl, name }: { currentUrl: string | null; 
     });
   }
 
-  const shownUrl = preview ?? currentUrl;
+  const shownUrl = preview ?? currentUrl ?? fallbackUrl;
+  const usingDefault = !preview && !currentUrl && !!fallbackUrl;
+  const label = preview ? "New logo — preview" : currentUrl ? "Current logo" : usingDefault ? "Default Villa Gjeçaj logo" : "No logo set";
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4">
         <span className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted/40">
-          {shownUrl ? (
+          {shownUrl && !imgFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={shownUrl} alt={`${name} logo`} className="size-full object-contain" />
+            <img src={shownUrl} alt={`${name} logo`} className="size-full object-contain" onError={() => setImgFailed(true)} />
           ) : (
             <span className="font-heading text-2xl font-semibold text-brand">{initial}</span>
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{preview ? "New logo — preview" : currentUrl ? "Current logo" : "No logo set"}</p>
+          <p className="text-sm font-medium">{label}</p>
           <p className="text-xs text-muted-foreground">
-            {pickedName ? pickedName : "PNG, JPEG or WebP up to 2 MB. A square image around 512×512 with a transparent background works best. The name initial is shown as a fallback."}
+            {pickedName ? pickedName : "PNG, JPEG or WebP up to 2 MB. A square image around 512×512 with a transparent background works best. The name initial is shown if the image can't load."}
           </p>
         </div>
       </div>

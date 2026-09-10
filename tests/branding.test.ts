@@ -10,6 +10,7 @@ vi.mock("@/lib/email", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { buildReservationEmails } from "@/lib/notifications";
+import { resolveLogoUrl, BUNDLED_LOGO_PATH } from "@/lib/branding";
 
 const LOGO = "https://booking.gjecaj.al/logo.png";
 let tableId = "";
@@ -44,7 +45,9 @@ describe("branding", () => {
     expect(emails?.customer?.html).toContain('alt="Villa Gjecaj"'); // readable when images blocked
   });
 
-  it("falls back to the restaurant name text when no logo is set", async () => {
+  it("with no uploaded logo and a non-https base, renders no <img> (dev) but keeps the name text", async () => {
+    // appUrl() is mocked http://localhost:3000, so the bundled default resolves
+    // to an http URL that the layout intentionally does not render as an image.
     const id = await seed(null);
     const emails = await buildReservationEmails(id, "BookingConfirmation");
     expect(emails?.customer?.html).not.toContain("<img src=");
@@ -70,5 +73,21 @@ describe("branding", () => {
       const html = emails?.customer?.html ?? emails?.owner?.html ?? "";
       if (html) expect(html).toContain(`<img src="${LOGO}"`);
     }
+  });
+
+  it("an uploaded logo renders as the email logo even with no bundled fallback needed", async () => {
+    const id = await seed(LOGO);
+    const emails = await buildReservationEmails(id, "BookingConfirmation");
+    expect(emails?.customer?.html).toContain(`<img src="${LOGO}"`);
+  });
+});
+
+describe("resolveLogoUrl (bundled default vs uploaded)", () => {
+  it("returns the uploaded URL when set", () => {
+    expect(resolveLogoUrl(LOGO, "https://booking.gjecaj.al")).toBe(LOGO);
+  });
+  it("falls back to the bundled default (absolute) when unset", () => {
+    expect(resolveLogoUrl(null, "https://booking.gjecaj.al")).toBe(`https://booking.gjecaj.al${BUNDLED_LOGO_PATH}`);
+    expect(resolveLogoUrl("", "https://booking.gjecaj.al/")).toBe(`https://booking.gjecaj.al${BUNDLED_LOGO_PATH}`);
   });
 });

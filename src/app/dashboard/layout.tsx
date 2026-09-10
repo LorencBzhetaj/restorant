@@ -1,6 +1,7 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminTopbar } from "@/components/admin/admin-topbar";
 import { getRestaurant, getActiveTables } from "@/server/data";
+import { BUNDLED_LOGO_PATH } from "@/lib/branding";
 
 export default async function DashboardLayout({
   children,
@@ -10,15 +11,16 @@ export default async function DashboardLayout({
   const [settings, tables] = await Promise.all([getRestaurant(), getActiveTables()]);
 
   const tableOptions = tables.map((t) => ({ id: t.id, name: t.name, seats: t.seats, section: t.section }));
+  const logoUrl = settings.logoUrl ?? BUNDLED_LOGO_PATH;
 
   return (
     <div className="flex min-h-screen bg-muted/30">
       <aside className="fixed inset-y-0 left-0 hidden w-64 lg:block">
-        <AdminSidebar shopName={settings.name} logoUrl={settings.logoUrl} />
+        <AdminSidebar shopName={settings.name} logoUrl={logoUrl} />
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-64">
-        <AdminTopbar restaurantName={settings.name} logoUrl={settings.logoUrl} tables={tableOptions} />
+        <AdminTopbar restaurantName={settings.name} logoUrl={logoUrl} tables={tableOptions} />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
