@@ -12,14 +12,14 @@ export default async function ReserveLayout({ children }: { children: React.Reac
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}`
     : null;
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30">
+    <div className="reserve-theme flex min-h-screen flex-col">
       <EmbedResizer />
-      <header className="border-b border-border bg-background">
+      <header className="border-b border-border bg-card">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-center px-4 sm:px-6">
           <Link href="/reserve"><BrandMark name={s.name} logoUrl={s.logoUrl ?? BUNDLED_LOGO_PATH} /></Link>
         </div>
       </header>
-      <div className="border-b border-border bg-background/60 py-6">
+      <div className="border-b border-border bg-card/60 py-6">
         <div className="px-4 sm:px-6"><ReserveStepper /></div>
       </div>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6 md:py-14">{children}</main>

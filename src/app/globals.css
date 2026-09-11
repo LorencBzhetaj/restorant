@@ -158,3 +158,35 @@
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
+/* ── Public booking (/reserve) — alpine cream + gold + forest theme ───────── */
+.reserve-theme {
+  --background: #f6f2ea;
+  --foreground: #17160f;
+  --card: #ffffff;
+  --card-foreground: #2b2a26;
+  --popover: #ffffff;
+  --popover-foreground: #2b2a26;
+  --muted: #efe9dd;
+  --muted-foreground: #6f6b60;
+  --accent: #efe9dd;
+  --accent-foreground: #2b2a26;
+  --secondary: #efe9dd;
+  --secondary-foreground: #2b2a26;
+  --border: #e3ddc9;
+  --input: #e3ddc9;
+  --ring: #c9974d;
+  --brand: #a97b38;          /* gold-dark — eyebrows, borders, date/time accents */
+  --brand-foreground: #ffffff;
+  --primary: #33452f;        /* forest — the primary CTA (Confirm reservation) */
+  --primary-foreground: #f6f2ea;
+  --font-heading: var(--font-cormorant);
+  --font-sans: var(--font-jost);
+  background: var(--background);
+  color: var(--card-foreground);
+  font-family: var(--font-jost), "Inter", system-ui, sans-serif;
+}
+/* Cormorant runs small — give the reserve headings a touch more presence. */
+.reserve-theme :is(h1, h2, .font-heading) {
+  font-family: var(--font-cormorant), Georgia, serif;
+  letter-spacing: 0.01em;
+}
